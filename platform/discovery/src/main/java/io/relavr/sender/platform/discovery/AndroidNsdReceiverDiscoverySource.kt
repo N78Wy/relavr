@@ -295,7 +295,7 @@ class AndroidNsdReceiverDiscoverySource(
                         ReceiverDiscoveryPayloadCodec.decode(
                             serviceName = serviceName,
                             host = host,
-                            port = resolvedServiceInfo.port,
+                            resolvedPort = resolvedServiceInfo.port,
                             attributes = attributes,
                         )
                     }.onSuccess { receiver ->

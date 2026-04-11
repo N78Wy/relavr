@@ -4,7 +4,7 @@ object ReceiverDiscoveryPayloadCodec {
     fun decode(
         serviceName: String,
         host: String,
-        port: Int,
+        resolvedPort: Int,
         attributes: Map<String, String>,
     ): DiscoveredReceiver {
         val protocolVersion =
@@ -21,6 +21,15 @@ object ReceiverDiscoveryPayloadCodec {
                 null, "" -> throw IllegalArgumentException("发现协议缺少鉴权模式")
                 else -> throw IllegalArgumentException("未知的鉴权模式: $auth")
             }
+        val port =
+            attributes[PORT_KEY]
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?.toIntOrNull()
+                ?: resolvedPort
+        if (port !in 1..65535) {
+            throw IllegalArgumentException("发现协议端口无效: $port")
+        }
 
         return DiscoveredReceiver(
             serviceName = serviceName,
@@ -39,6 +48,7 @@ object ReceiverDiscoveryPayloadCodec {
 
     private const val NAME_KEY = "name"
     private const val VERSION_KEY = "ver"
+    private const val PORT_KEY = "port"
     private const val SESSION_ID_KEY = "sessionId"
     private const val AUTH_KEY = "auth"
     private const val AUTH_PIN = "pin"
