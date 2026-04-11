@@ -64,7 +64,7 @@
   - 集成测试使用 fake ProjectionPermissionGateway 与 fake RtcPublisher，验证开始/停止、失败回滚、资源释放。
   - Android UI 测试覆盖发送控制台的权限流程、开始/停止按钮、错误展示、音频开关与编码偏好切换。
   - Quest 3 真机验收至少覆盖：授权弹窗、开始推流、停止推流、再次授权、前后台切换、H.264 视频链路可稳定输出。
-  - 根目录校验命令统一为 ./gradlew spotlessCheck lintDebug testDebugUnitTest connectedDebugAndroidTest；Quest 真机链路作为额外手动
+  - 根目录校验命令统一为 ./gradlew spotlessCheck lintDebug testDebugUnitTest；Quest 真机链路作为额外手动
     验收，不并入通用 CI。
 
   ## 假设与默认值

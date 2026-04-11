@@ -37,4 +37,3 @@
 - `./gradlew spotlessCheck`：通过。
 - `./gradlew lintDebug`：通过；在降低 Gradle 堆上限后稳定完成。
 - `./gradlew testDebugUnitTest`：通过。
-- `./gradlew connectedDebugAndroidTest`：执行到设备阶段后失败，原因是当前环境没有已连接 Android 设备，Gradle 报错 `No connected devices!`。

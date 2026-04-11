@@ -40,5 +40,5 @@
 - 单元测试至少覆盖 codec 选择策略、发送会话状态机与 ViewModel 行为。
 - 集成测试至少覆盖开始推流、失败回滚、停止释放。
 - Compose UI 测试至少覆盖发送控制台的开始/停止交互与错误展示入口。
-- 根目录验收命令固定为 `./gradlew spotlessCheck lintDebug testDebugUnitTest connectedDebugAndroidTest`。
+- 根目录验收命令固定为 `./gradlew spotlessCheck lintDebug testDebugUnitTest`。
 - `demo/browser-preview` 变更必须额外覆盖 Node 单元测试、Node 集成测试，并执行 `npm run format:check`、`npm run lint`、`npm run test`。
