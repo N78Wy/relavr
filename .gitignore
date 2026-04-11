@@ -1,6 +1,7 @@
 *.iml
 .gradle/
 .gradle-home/
+.gradle-local/
 .idea/
 local.properties
 captures/

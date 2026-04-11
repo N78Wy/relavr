@@ -7,6 +7,11 @@ pluginManagement {
     }
 }
 
+plugins {
+    // 为主工程启用 Java toolchain 下载解析，避免仅依赖本机自动探测。
+    id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
+}
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {

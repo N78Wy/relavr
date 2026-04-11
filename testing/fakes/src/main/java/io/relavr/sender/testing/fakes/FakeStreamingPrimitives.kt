@@ -1,5 +1,6 @@
 package io.relavr.sender.testing.fakes
 
+import io.relavr.sender.core.common.AppLogger
 import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.CodecSelection
@@ -182,6 +183,24 @@ class FakeSignalingClient : SignalingClient {
 
     override fun close() {
         closeCount += 1
+    }
+}
+
+class FakeAppLogger : AppLogger {
+    data class ErrorLog(
+        val tag: String,
+        val message: String,
+        val throwable: Throwable?,
+    )
+
+    val errorLogs = mutableListOf<ErrorLog>()
+
+    override fun error(
+        tag: String,
+        message: String,
+        throwable: Throwable?,
+    ) {
+        errorLogs += ErrorLog(tag = tag, message = message, throwable = throwable)
     }
 }
 

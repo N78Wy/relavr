@@ -5,6 +5,7 @@ import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
+import io.relavr.sender.testing.fakes.FakeAppLogger
 import io.relavr.sender.testing.fakes.FakeAudioCaptureSource
 import io.relavr.sender.testing.fakes.FakeAudioCaptureSourceFactory
 import io.relavr.sender.testing.fakes.FakeCodecCapabilityRepository
@@ -19,6 +20,7 @@ import io.relavr.sender.testing.fakes.TestAppDispatchers
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -33,6 +35,7 @@ class StreamingSessionCoordinatorTest {
             val audioSource = FakeAudioCaptureSource()
             val rtcPublisherFactory = FakeRtcPublisherFactory()
             val signalingClient = FakeSignalingClient()
+            val logger = FakeAppLogger()
 
             val coordinator =
                 StreamingSessionCoordinator(
@@ -44,6 +47,7 @@ class StreamingSessionCoordinatorTest {
                     rtcPublisherFactory = rtcPublisherFactory,
                     signalingClient = signalingClient,
                     dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
+                    logger = logger,
                 )
 
             coordinator.start(StreamConfig(codecPreference = CodecPreference.H264))
@@ -60,6 +64,7 @@ class StreamingSessionCoordinatorTest {
     fun `start 被拒绝授权时写入错误状态`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
+            val logger = FakeAppLogger()
             val coordinator =
                 StreamingSessionCoordinator(
                     projectionPermissionGateway = FakeProjectionPermissionGateway(shouldDeny = true),
@@ -70,6 +75,7 @@ class StreamingSessionCoordinatorTest {
                     rtcPublisherFactory = FakeRtcPublisherFactory(),
                     signalingClient = FakeSignalingClient(),
                     dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
+                    logger = logger,
                 )
 
             coordinator.start(StreamConfig())
@@ -78,6 +84,9 @@ class StreamingSessionCoordinatorTest {
             assertEquals(CaptureState.Error, state.captureState)
             assertEquals(PublishState.Error, state.publishState)
             assertEquals(SenderError.PermissionDenied, state.error)
+            assertEquals(1, logger.errorLogs.size)
+            assertTrue(logger.errorLogs.single().message.contains("请求投屏权限失败"))
+            assertNotNull(logger.errorLogs.single().throwable)
         }
 
     @Test
@@ -89,6 +98,7 @@ class StreamingSessionCoordinatorTest {
             val audioSource = FakeAudioCaptureSource()
             val rtcPublisherFactory = FakeRtcPublisherFactory()
             val signalingClient = FakeSignalingClient()
+            val logger = FakeAppLogger()
 
             val coordinator =
                 StreamingSessionCoordinator(
@@ -100,6 +110,7 @@ class StreamingSessionCoordinatorTest {
                     rtcPublisherFactory = rtcPublisherFactory,
                     signalingClient = signalingClient,
                     dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
+                    logger = logger,
                 )
 
             coordinator.start(StreamConfig())
@@ -113,5 +124,40 @@ class StreamingSessionCoordinatorTest {
             assertTrue(audioSource.closed)
             assertTrue(rtcPublisherFactory.session.closed)
             assertEquals(1, signalingClient.closeCount)
+        }
+
+    @Test
+    fun `start 失败时写入异常日志`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val rtcPublisherFactory =
+                FakeRtcPublisherFactory().also {
+                    it.session.shouldFail = true
+                }
+            val logger = FakeAppLogger()
+
+            val coordinator =
+                StreamingSessionCoordinator(
+                    projectionPermissionGateway = FakeProjectionPermissionGateway(),
+                    videoCaptureSourceFactory = FakeVideoCaptureSourceFactory(),
+                    audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(),
+                    codecCapabilityRepository = FakeCodecCapabilityRepository(),
+                    codecPolicy = FakeCodecPolicy(),
+                    rtcPublisherFactory = rtcPublisherFactory,
+                    signalingClient = FakeSignalingClient(),
+                    dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
+                    logger = logger,
+                )
+
+            coordinator.start(StreamConfig())
+
+            val state = coordinator.observeState().value
+            assertEquals(CaptureState.Error, state.captureState)
+            assertEquals(PublishState.Error, state.publishState)
+            assertEquals(SenderError.SessionStartFailed("fake-publish-failure"), state.error)
+            assertEquals(1, logger.errorLogs.size)
+            assertTrue(logger.errorLogs.single().message.contains("启动推流会话失败"))
+            assertTrue(logger.errorLogs.single().message.contains("fake-publish-failure"))
+            assertNotNull(logger.errorLogs.single().throwable)
         }
 }

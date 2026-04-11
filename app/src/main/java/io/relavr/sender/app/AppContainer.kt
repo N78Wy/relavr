@@ -2,6 +2,7 @@ package io.relavr.sender.app
 
 import android.app.Application
 import android.media.projection.MediaProjectionManager
+import io.relavr.sender.core.common.AndroidAppLogger
 import io.relavr.sender.core.common.DefaultAppDispatchers
 import io.relavr.sender.core.session.StreamingSessionController
 import io.relavr.sender.core.session.StreamingSessionCoordinator
@@ -32,6 +33,7 @@ class AppContainer(
             rtcPublisherFactory = LoggingRtcPublisherFactory(),
             signalingClient = NoOpSignalingClient(),
             dispatchers = DefaultAppDispatchers,
+            logger = AndroidAppLogger,
         )
 
     val streamControlViewModelFactory = StreamControlViewModelFactory(sessionController)

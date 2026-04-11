@@ -1,6 +1,7 @@
 package io.relavr.sender.core.session
 
 import io.relavr.sender.core.common.AppDispatchers
+import io.relavr.sender.core.common.AppLogger
 import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.PublishState
@@ -24,6 +25,7 @@ class StreamingSessionCoordinator(
     private val rtcPublisherFactory: RtcPublisherFactory,
     private val signalingClient: SignalingClient,
     private val dispatchers: AppDispatchers,
+    private val logger: AppLogger,
 ) : StreamingSessionController {
     private val state = MutableStateFlow(StreamingSessionSnapshot())
     private val sessionMutex = Mutex()
@@ -58,7 +60,11 @@ class StreamingSessionCoordinator(
                     projectionPermissionGateway.restoreIfAvailable()
                         ?: projectionPermissionGateway.requestPermission()
                 } catch (throwable: Throwable) {
-                    handleFailure(mapError(throwable))
+                    handleFailure(
+                        error = mapError(throwable),
+                        throwable = throwable,
+                        operation = "请求投屏权限失败",
+                    )
                     return
                 }
 
@@ -127,7 +133,11 @@ class StreamingSessionCoordinator(
                 withContext(dispatchers.io) {
                     signalingClient.closeSession()
                 }
-                handleFailure(mapError(throwable))
+                handleFailure(
+                    error = mapError(throwable),
+                    throwable = throwable,
+                    operation = "启动推流会话失败",
+                )
             }
         }
     }
@@ -176,15 +186,28 @@ class StreamingSessionCoordinator(
                     )
                 }
             } catch (throwable: Throwable) {
-                handleFailure(SenderError.SessionStopFailed(throwable.message ?: "停止推流失败"))
+                handleFailure(
+                    error = SenderError.SessionStopFailed(throwable.message ?: "停止推流失败"),
+                    throwable = throwable,
+                    operation = "停止推流会话失败",
+                )
             }
         }
     }
 
     override fun observeState(): StateFlow<StreamingSessionSnapshot> = state
 
-    private fun handleFailure(error: SenderError) {
+    private fun handleFailure(
+        error: SenderError,
+        throwable: Throwable? = null,
+        operation: String,
+    ) {
         activeSession = null
+        logger.error(
+            TAG,
+            "$operation: ${error.message}",
+            throwable,
+        )
         state.update {
             it.copy(
                 captureState = CaptureState.Error,
@@ -209,6 +232,10 @@ class StreamingSessionCoordinator(
         val audioSource: AudioCaptureSource?,
         val publishSession: RtcPublishSession,
     )
+
+    private companion object {
+        const val TAG = "StreamingSession"
+    }
 }
 
 class PermissionDeniedException : IllegalStateException("用户拒绝了屏幕采集授权")
