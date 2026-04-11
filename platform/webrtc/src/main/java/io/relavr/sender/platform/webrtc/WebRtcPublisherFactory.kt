@@ -49,6 +49,7 @@ import kotlin.coroutines.resume
 
 class WebRtcPublisherFactory(
     private val appContext: Context,
+    private val libraryInitializer: WebRtcLibraryInitializer,
     private val logger: AppLogger,
 ) : RtcPublisherFactory {
     override suspend fun createSession(
@@ -59,6 +60,7 @@ class WebRtcPublisherFactory(
             appContext = appContext.applicationContext,
             config = config,
             signalingSession = signalingSession,
+            libraryInitializer = libraryInitializer,
             logger = logger,
         )
 }
@@ -67,6 +69,7 @@ private class WebRtcPublishSession(
     private val appContext: Context,
     private val config: StreamConfig,
     private val signalingSession: SignalingSession,
+    private val libraryInitializer: WebRtcLibraryInitializer,
     private val logger: AppLogger,
 ) : RtcPublishSession {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -75,7 +78,7 @@ private class WebRtcPublishSession(
         PlaybackAudioBufferBridge { detail ->
             eventFlow.tryEmit(RtcSessionEvent.AudioDegraded(detail))
         }
-    private val runtime = WebRtcRuntime(appContext, audioBridge)
+    private val runtime = WebRtcRuntime(appContext, libraryInitializer, audioBridge)
     private val terminalError = CompletableDeferred<SenderError>()
     private val remoteDescriptionReady = CompletableDeferred<Unit>()
     private val peerConnected = CompletableDeferred<Unit>()
@@ -491,6 +494,7 @@ private class WebRtcPublishSession(
 
 private class WebRtcRuntime(
     val appContext: Context,
+    private val libraryInitializer: WebRtcLibraryInitializer,
     audioBridge: PlaybackAudioBufferBridge,
 ) : Closeable {
     val eglBase: EglBase = EglBase.create()
@@ -509,7 +513,7 @@ private class WebRtcRuntime(
             }
 
     val peerConnectionFactory: PeerConnectionFactory by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        initializePeerConnectionFactory(appContext)
+        libraryInitializer.ensureInitialized()
         PeerConnectionFactory
             .builder()
             .setAudioDeviceModule(audioDeviceModule)
@@ -536,19 +540,8 @@ private class WebRtcRuntime(
         }
     }
 
-    private fun initializePeerConnectionFactory(context: Context) {
-        if (initialized.compareAndSet(false, true)) {
-            PeerConnectionFactory.initialize(
-                PeerConnectionFactory.InitializationOptions
-                    .builder(context)
-                    .createInitializationOptions(),
-            )
-        }
-    }
-
     private companion object {
         const val AUDIO_SAMPLE_RATE_HZ = 48_000
-        val initialized = AtomicBoolean(false)
     }
 }
 

@@ -7,11 +7,21 @@ fun interface WebRtcCodecSupportProvider {
     fun getSupportedCodecs(): Set<CodecPreference>
 }
 
-class DefaultWebRtcCodecSupportProvider : WebRtcCodecSupportProvider {
-    override fun getSupportedCodecs(): Set<CodecPreference> =
+class DefaultWebRtcCodecSupportProvider(
+    private val libraryInitializer: WebRtcLibraryInitializer,
+    private val supportedCodecNamesProvider: () -> List<String> = {
         DefaultVideoEncoderFactory(null, true, true)
             .supportedCodecs
-            .mapNotNull { codecInfo ->
-                CodecPreference.fromWebRtcCodecName(codecInfo.name)
+            .map { codecInfo -> codecInfo.name }
+    },
+) : WebRtcCodecSupportProvider {
+    override fun getSupportedCodecs(): Set<CodecPreference> = supportedCodecNames()
+
+    private fun supportedCodecNames(): Set<CodecPreference> {
+        libraryInitializer.ensureInitialized()
+        return supportedCodecNamesProvider()
+            .mapNotNull { codecName ->
+                CodecPreference.fromWebRtcCodecName(codecName)
             }.toSet()
+    }
 }

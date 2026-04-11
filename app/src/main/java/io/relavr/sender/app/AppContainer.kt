@@ -12,6 +12,7 @@ import io.relavr.sender.platform.androidcapture.PlaybackAudioCaptureSourceFactor
 import io.relavr.sender.platform.mediacodec.AndroidMediaCodecCapabilityRepository
 import io.relavr.sender.platform.mediacodec.DefaultCodecPolicy
 import io.relavr.sender.platform.webrtc.DefaultWebRtcCodecSupportProvider
+import io.relavr.sender.platform.webrtc.WebRtcLibraryInitializer
 import io.relavr.sender.platform.webrtc.WebRtcPublisherFactory
 import io.relavr.sender.platform.webrtc.WebSocketSignalingClient
 
@@ -20,6 +21,7 @@ class AppContainer(
 ) {
     private val mediaProjectionManager =
         application.getSystemService(MediaProjectionManager::class.java)
+    private val webRtcLibraryInitializer = WebRtcLibraryInitializer.create(application)
 
     val projectionPermissionGateway = AndroidProjectionPermissionGateway(mediaProjectionManager)
     internal val recordAudioPermissionGateway = AndroidRecordAudioPermissionGateway(application)
@@ -31,10 +33,12 @@ class AppContainer(
             codecCapabilityRepository =
                 CombinedCodecCapabilityRepository(
                     androidCapabilityRepository = AndroidMediaCodecCapabilityRepository(DefaultAppDispatchers),
-                    webRtcCodecSupportProvider = DefaultWebRtcCodecSupportProvider(),
+                    webRtcCodecSupportProvider =
+                        DefaultWebRtcCodecSupportProvider(webRtcLibraryInitializer),
                 ),
             codecPolicy = DefaultCodecPolicy(),
-            rtcPublisherFactory = WebRtcPublisherFactory(application, AndroidAppLogger),
+            rtcPublisherFactory =
+                WebRtcPublisherFactory(application, webRtcLibraryInitializer, AndroidAppLogger),
             signalingClient = WebSocketSignalingClient(logger = AndroidAppLogger),
             dispatchers = DefaultAppDispatchers,
             logger = AndroidAppLogger,

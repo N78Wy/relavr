@@ -15,11 +15,13 @@
 `workflow/done/260411-fix-cleartext-websocket-policy.md` - 已修复 Android 明文 WebSocket 被网络安全策略拦截的问题，记录 manifest 策略、默认地址调整与回归测试。
 `workflow/done/260411-implement-webrtc-audio-streaming.md` - 已完成 Quest 3 sender 音频采集、WebRTC 音轨推流、录音权限预检与浏览器音频预览闭环，并记录降级策略与验证结果。
 `workflow/done/260411-implement-codec-switching.md` - 已完成发送端多编码格式切换，记录能力交集、默认回退策略、发送控制台改造与验证结果。
+`workflow/done/260411-fix-webrtc-native-init-order.md` - 已修复 WebRTC codec 探测早于 native 初始化导致的启动崩溃，记录共享初始化器方案与回归验证。
 
 ## 全局重要记忆
 - 本仓库主线仍以 Quest 3 发送端为核心，但包含一个仅用于本地/局域网联调的浏览器预览 demo，不作为正式接收端产品实现。
 - 技术栈固定为 Kotlin、Gradle Kotlin DSL、Jetpack Compose、Coroutines/Flow。
 - 首版依赖注入方式固定为 AppContainer + 构造注入，不引入 Hilt 或 Koin。
+- 所有会触发 `org.webrtc` JNI 的路径都必须先复用共享 `WebRtcLibraryInitializer` 完成一次性初始化，不能假设 native 库已由其他流程预先加载。
 - 默认推流策略固定为 H.264 优先；若当前设备或 libwebrtc 不支持 H.264，则按 HEVC、VP8、VP9 顺序回退。发送控制台支持在开播前切换编码偏好，推流中保持锁定。
 - 首阶段 sender 建链协议固定为 `WebSocket + JSON Offer/Answer`，发送控制台必须提供 `signalingEndpoint` 与 `sessionId` 输入。
 - sender 音频默认开启，固定通过 `AudioPlaybackCapture` 采集系统播放音频；若缺少 `RECORD_AUDIO`、设备不支持或运行时读取失败，必须降级为仅视频/静音而不能打断推流会话。
