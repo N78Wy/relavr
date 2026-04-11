@@ -25,8 +25,6 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ForegroundServiceStreamingSessionIntegrationTest {
-    private val validConfig = StreamConfig(signalingEndpoint = "ws://192.168.123.182:8765")
-
     @Test
     fun `服务控制器会透传底层会话引擎的推流状态`() =
         runTest {
@@ -56,7 +54,7 @@ class ForegroundServiceStreamingSessionIntegrationTest {
 
             advanceUntilIdle()
 
-            val config = validConfig.copy(codecPreference = CodecPreference.H264)
+            val config = StreamConfig(codecPreference = CodecPreference.H264)
             controller.start(config)
 
             assertEquals(1, commandDispatcher.startCount)

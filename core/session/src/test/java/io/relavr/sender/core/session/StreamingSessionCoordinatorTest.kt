@@ -27,8 +27,6 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class StreamingSessionCoordinatorTest {
-    private val validConfig = StreamConfig(signalingEndpoint = "ws://192.168.123.182:8765")
-
     @Test
     fun `start 成功后进入推流中状态`() =
         runTest {
@@ -51,7 +49,7 @@ class StreamingSessionCoordinatorTest {
                     logger = logger,
                 )
 
-            coordinator.start(validConfig.copy(codecPreference = CodecPreference.H264, audioEnabled = false))
+            coordinator.start(StreamConfig(codecPreference = CodecPreference.H264, audioEnabled = false))
             advanceUntilIdle()
 
             val state = coordinator.observeState().value
@@ -107,7 +105,7 @@ class StreamingSessionCoordinatorTest {
                     logger = logger,
                 )
 
-            coordinator.start(validConfig.copy(audioEnabled = true))
+            coordinator.start(StreamConfig(audioEnabled = true))
             advanceUntilIdle()
 
             val state = coordinator.observeState().value
@@ -146,7 +144,7 @@ class StreamingSessionCoordinatorTest {
                     logger = logger,
                 )
 
-            coordinator.start(validConfig.copy(audioEnabled = true))
+            coordinator.start(StreamConfig(audioEnabled = true))
             advanceUntilIdle()
             coordinator.stop()
             advanceUntilIdle()
@@ -178,7 +176,7 @@ class StreamingSessionCoordinatorTest {
                     logger = FakeAppLogger(),
                 )
 
-            coordinator.start(validConfig)
+            coordinator.start(StreamConfig())
             advanceUntilIdle()
             rtcPublisherFactory.session.emitEvent(RtcSessionEvent.Disconnected)
             advanceUntilIdle()
@@ -212,7 +210,7 @@ class StreamingSessionCoordinatorTest {
                     logger = logger,
                 )
 
-            coordinator.start(validConfig)
+            coordinator.start(StreamConfig())
             advanceUntilIdle()
 
             val state = coordinator.observeState().value

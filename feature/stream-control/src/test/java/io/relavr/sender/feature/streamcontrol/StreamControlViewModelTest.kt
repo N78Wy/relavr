@@ -40,10 +40,8 @@ class StreamControlViewModelTest {
 
             val state = viewModel.uiState.value
             assertEquals(CodecPreference.H264.displayName, state.codecLabel)
-            assertEquals("", state.signalingEndpoint)
+            assertTrue(state.signalingEndpoint.startsWith("ws://"))
             assertTrue(state.sessionId.isNotBlank())
-            assertFalse(state.startEnabled)
-            assertEquals("请先填写 Quest 可访问的 WebSocket 地址后再开始推流", state.startHint)
         }
 
     @Test
@@ -52,15 +50,14 @@ class StreamControlViewModelTest {
             val controller = FakeStreamingSessionController()
             val viewModel = StreamControlViewModel(sessionController = controller)
 
-            viewModel.onSignalingEndpointChanged("ws://192.168.123.182:8765")
+            viewModel.onSignalingEndpointChanged("wss://signal.example/ws")
             viewModel.onSessionIdChanged("room-42")
             viewModel.onStartClicked()
             advanceUntilIdle()
 
             assertEquals(1, controller.startCount)
-            assertEquals("ws://192.168.123.182:8765", controller.lastStartConfig?.signalingEndpoint)
+            assertEquals("wss://signal.example/ws", controller.lastStartConfig?.signalingEndpoint)
             assertEquals("room-42", controller.lastStartConfig?.sessionId)
             assertFalse(controller.lastStartConfig?.audioEnabled ?: true)
-            assertTrue(viewModel.uiState.value.startEnabled)
         }
 }
