@@ -8,6 +8,7 @@
 （暂无）
 
 ## 已完成任务文档
+`workflow/done/260411-sender-qr-auto-connect.md` - 已为 Quest 3 sender 增加扫码解析 receiver 二维码并自动连接的能力，记录协议镜像、Quest 相机接入与验收结果。
 `workflow/done/260411-expand-stream-options-and-adaptive-layout.md` - 已扩展发送端规格选择，修复 Quest 默认窄窗、自适应布局与低对比度文字问题，并记录验证结果。
 `workflow/done/260411-browser-preview-demo.md` - 已增加本地/局域网浏览器预览 demo，记录 Node 信令服务、浏览器 receiver 页面与验证结果。
 `workflow/done/260411-implement-plan-bootstrap.md` - 已完成 Quest 3 发送端 Android 多模块骨架初始化，记录实现边界与验证结果。
@@ -25,6 +26,7 @@
 - 所有会触发 `org.webrtc` JNI 的路径都必须先复用共享 `WebRtcLibraryInitializer` 完成一次性初始化，不能假设 native 库已由其他流程预先加载。
 - 默认推流策略固定为 H.264 优先；若当前设备或 libwebrtc 不支持 H.264，则按 HEVC、VP8、VP9 顺序回退。发送控制台支持在开播前切换编码偏好，推流中保持锁定。
 - 首阶段 sender 建链协议固定为 `WebSocket + JSON Offer/Answer`，发送控制台必须提供 `signalingEndpoint` 与 `sessionId` 输入。
+- sender 扫码自动连接固定镜像 `relavr-view` receiver 二维码协议 `type=receiver-connect/ver=1/name/sessionId/host/port/auth`，当前不抽共享模块，协议变更时需双仓同步。
 - sender 音频默认开启，固定通过 `AudioPlaybackCapture` 采集系统播放音频；若缺少 `RECORD_AUDIO`、设备不支持或运行时读取失败，必须降级为仅视频/静音而不能打断推流会话。
 - 提交前必须至少执行 `./gradlew spotlessCheck`、`./gradlew lintDebug`、`./gradlew testDebugUnitTest`。
 - 如改动 `demo/browser-preview`，还必须执行 `npm run format:check`、`npm run lint`、`npm run test`。

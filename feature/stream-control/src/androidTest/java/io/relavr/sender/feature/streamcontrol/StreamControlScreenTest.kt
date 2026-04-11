@@ -104,6 +104,53 @@ class StreamControlScreenTest {
             .onNodeWithText("Quest 3 实机请填写开发机局域网地址，例如 ws://192.168.1.20:8080/ws；10.0.2.2 仅适用于 Android 模拟器。")
             .assertIsDisplayed()
         composeRule.onNodeWithText("例如 ws://192.168.1.20:8080/ws").assertIsDisplayed()
+        composeRule.onNodeWithTag(StreamControlTestTags.SCAN_BUTTON).assertIsDisplayed()
+        composeRule
+            .onNodeWithText("扫描 receiver 控制台二维码后会自动回填地址并立即开播")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun `扫码按钮会触发回调`() {
+        var openScannerCount = 0
+
+        setStreamControlContent(
+            uiState =
+                buildStreamControlUiState(
+                    config = validConfig(),
+                    sessionSnapshot = StreamingSessionSnapshot(),
+                ),
+            onOpenScannerClicked = { openScannerCount += 1 },
+        )
+
+        composeRule.onNodeWithTag(StreamControlTestTags.SCAN_BUTTON).performClick()
+        assertEquals(1, openScannerCount)
+    }
+
+    @Test
+    fun `扫码状态文案会显示最近扫描结果`() {
+        setStreamControlContent(
+            uiState =
+                buildStreamControlUiState(
+                    config = validConfig(),
+                    scannerState =
+                        QrScannerState(
+                            lastReceiver =
+                                io.relavr.sender.core.model.ReceiverConnectionInfo(
+                                    receiverName = "Living Room",
+                                    sessionId = "demo",
+                                    host = "192.168.1.20",
+                                    port = 17888,
+                                    authRequired = true,
+                                ),
+                        ),
+                    sessionSnapshot = StreamingSessionSnapshot(),
+                ),
+        )
+
+        composeRule
+            .onNodeWithText("最近扫码：Living Room（192.168.1.20:17888），接收端仍需本地确认")
+            .assertIsDisplayed()
     }
 
     @Test
@@ -278,6 +325,7 @@ class StreamControlScreenTest {
         onSessionIdChanged: (String) -> Unit = {},
         onCodecPreferenceChanged: (CodecPreference) -> Unit = {},
         onAudioEnabledChanged: (Boolean) -> Unit = {},
+        onOpenScannerClicked: () -> Unit = {},
         onResolutionChanged: (VideoResolution) -> Unit = {},
         onFpsChanged: (Int) -> Unit = {},
         onBitrateChanged: (Int) -> Unit = {},
@@ -292,6 +340,7 @@ class StreamControlScreenTest {
                     onSessionIdChanged = onSessionIdChanged,
                     onCodecPreferenceChanged = onCodecPreferenceChanged,
                     onAudioEnabledChanged = onAudioEnabledChanged,
+                    onOpenScannerClicked = onOpenScannerClicked,
                     onResolutionChanged = onResolutionChanged,
                     onFpsChanged = onFpsChanged,
                     onBitrateChanged = onBitrateChanged,

@@ -2,6 +2,8 @@ package io.relavr.sender.feature.streamcontrol
 
 import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CodecPreference
+import io.relavr.sender.core.model.ReceiverConnectPayloadCodec
+import io.relavr.sender.core.model.ReceiverConnectionInfo
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.VideoResolution
 import io.relavr.sender.testing.fakes.FakeStreamingSessionController
@@ -82,6 +84,64 @@ class StreamControlViewModelTest {
             assertEquals(60, controller.lastStartConfig?.fps)
             assertEquals(8000, controller.lastStartConfig?.bitrateKbps)
             assertTrue(controller.lastStartConfig?.audioEnabled ?: false)
+        }
+
+    @Test
+    fun `扫码成功后会自动回填连接信息并立即开始推流`() =
+        runTest(dispatcher.scheduler) {
+            val controller = FakeStreamingSessionController()
+            val viewModel = StreamControlViewModel(sessionController = controller)
+            val payload =
+                ReceiverConnectPayloadCodec.encode(
+                    ReceiverConnectionInfo(
+                        receiverName = "Living Room",
+                        sessionId = "receiver-room",
+                        host = "192.168.50.20",
+                        port = 17888,
+                        authRequired = true,
+                    ),
+                )
+
+            viewModel.onCodecPreferenceChanged(CodecPreference.HEVC)
+            viewModel.onResolutionChanged(VideoResolution(width = 1920, height = 1080))
+            viewModel.onFpsChanged(60)
+            viewModel.onBitrateChanged(8000)
+            viewModel.onAudioEnabledChanged(false)
+            viewModel.onScannerPayloadReceived(payload)
+            advanceUntilIdle()
+
+            assertEquals(1, controller.startCount)
+            assertEquals("ws://192.168.50.20:17888", controller.lastStartConfig?.signalingEndpoint)
+            assertEquals("receiver-room", controller.lastStartConfig?.sessionId)
+            assertEquals(CodecPreference.HEVC, controller.lastStartConfig?.codecPreference)
+            assertEquals(VideoResolution(width = 1920, height = 1080), controller.lastStartConfig?.resolution)
+            assertEquals(60, controller.lastStartConfig?.fps)
+            assertEquals(8000, controller.lastStartConfig?.bitrateKbps)
+            assertFalse(controller.lastStartConfig?.audioEnabled ?: true)
+            assertTrue(
+                viewModel.uiState.value.scanStatusLabel
+                    .contains("Living Room"),
+            )
+        }
+
+    @Test
+    fun `非法二维码不会污染配置也不会触发开播`() =
+        runTest(dispatcher.scheduler) {
+            val controller = FakeStreamingSessionController()
+            val viewModel = StreamControlViewModel(sessionController = controller)
+
+            viewModel.onSignalingEndpointChanged("ws://keep.example/ws")
+            viewModel.onSessionIdChanged("keep-room")
+            viewModel.onScannerPayloadReceived("not-json")
+            advanceUntilIdle()
+
+            assertEquals(0, controller.startCount)
+            assertEquals("ws://keep.example/ws", viewModel.uiState.value.signalingEndpoint)
+            assertEquals("keep-room", viewModel.uiState.value.sessionId)
+            assertTrue(
+                viewModel.uiState.value.scanStatusLabel
+                    .contains("JSON"),
+            )
         }
 
     @Test

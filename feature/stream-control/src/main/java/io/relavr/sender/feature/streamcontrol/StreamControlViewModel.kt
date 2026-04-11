@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import io.relavr.sender.core.model.CodecPreference
+import io.relavr.sender.core.model.ReceiverConnectPayloadCodec
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.VideoResolution
 import io.relavr.sender.core.session.StreamingSessionController
@@ -23,14 +24,17 @@ class StreamControlViewModel(
     initialConfig: StreamConfig = StreamConfig(),
 ) : ViewModel() {
     private val config = MutableStateFlow(initialConfig)
+    private val qrScannerState = MutableStateFlow(QrScannerState())
 
     val uiState: StateFlow<StreamControlUiState> =
         combine(
             config,
+            qrScannerState,
             sessionController.observeState(),
-        ) { currentConfig, sessionState ->
+        ) { currentConfig, currentQrScannerState, sessionState ->
             buildStreamControlUiState(
                 config = currentConfig,
+                scannerState = currentQrScannerState,
                 sessionSnapshot = sessionState,
             )
         }.stateIn(
@@ -39,6 +43,7 @@ class StreamControlViewModel(
             initialValue =
                 buildStreamControlUiState(
                     config = initialConfig,
+                    scannerState = qrScannerState.value,
                     sessionSnapshot = sessionController.observeState().value,
                 ),
         )
@@ -88,6 +93,50 @@ class StreamControlViewModel(
     fun onAudioEnabledChanged(enabled: Boolean) {
         config.update { current ->
             current.copy(audioEnabled = enabled)
+        }
+    }
+
+    fun onOpenScannerClicked() {
+        qrScannerState.update { current ->
+            current.copy(visible = true, errorMessage = null)
+        }
+    }
+
+    fun onScannerDismissed() {
+        qrScannerState.update { current ->
+            current.copy(visible = false)
+        }
+    }
+
+    fun onScannerFailed(message: String) {
+        qrScannerState.update { current ->
+            current.copy(visible = false, errorMessage = message)
+        }
+    }
+
+    fun onScannerPayloadReceived(payload: String) {
+        val connectionInfo =
+            runCatching { ReceiverConnectPayloadCodec.decode(payload) }
+                .getOrElse { throwable ->
+                    onScannerFailed(throwable.message ?: "二维码解析失败")
+                    return
+                }
+
+        val updatedConfig =
+            config.value.copy(
+                signalingEndpoint = connectionInfo.webSocketUrl,
+                sessionId = connectionInfo.sessionId,
+            )
+        config.value = updatedConfig
+
+        qrScannerState.value =
+            QrScannerState(
+                visible = false,
+                lastReceiver = connectionInfo,
+                errorMessage = null,
+            )
+        viewModelScope.launch {
+            sessionController.start(updatedConfig)
         }
     }
 

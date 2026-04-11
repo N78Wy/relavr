@@ -1,0 +1,56 @@
+package io.relavr.sender.core.model
+
+object ReceiverConnectPayloadCodec {
+    fun encode(info: ReceiverConnectionInfo): String =
+        SimpleJsonObjectCodec.encode(
+            linkedMapOf(
+                TYPE_KEY to TYPE_VALUE,
+                VERSION_KEY to info.protocolVersion,
+                NAME_KEY to info.receiverName,
+                SESSION_ID_KEY to info.sessionId,
+                HOST_KEY to info.host,
+                PORT_KEY to info.port,
+                AUTH_KEY to if (info.authRequired) AUTH_PIN else AUTH_NONE,
+            ),
+        )
+
+    fun decode(payload: String): ReceiverConnectionInfo {
+        val fields = SimpleJsonObjectCodec.decode(payload)
+        val type = fields.requireJsonString(TYPE_KEY)
+        if (type != TYPE_VALUE) {
+            throw IllegalArgumentException("未知的连接载荷类型: $type")
+        }
+
+        val protocolVersion = fields.requireJsonInt(VERSION_KEY)
+        if (protocolVersion != ReceiverConnectionInfo.CURRENT_PROTOCOL_VERSION) {
+            throw IllegalArgumentException("不支持的连接协议版本: $protocolVersion")
+        }
+
+        val authRequired =
+            when (val auth = fields.requireJsonString(AUTH_KEY)) {
+                AUTH_PIN -> true
+                AUTH_NONE -> false
+                else -> throw IllegalArgumentException("未知的鉴权模式: $auth")
+            }
+
+        return ReceiverConnectionInfo(
+            receiverName = fields.requireJsonString(NAME_KEY),
+            sessionId = fields.requireJsonString(SESSION_ID_KEY),
+            host = fields.requireJsonString(HOST_KEY),
+            port = fields.requireJsonInt(PORT_KEY),
+            authRequired = authRequired,
+            protocolVersion = protocolVersion,
+        )
+    }
+
+    private const val TYPE_KEY = "type"
+    private const val TYPE_VALUE = "receiver-connect"
+    private const val VERSION_KEY = "ver"
+    private const val NAME_KEY = "name"
+    private const val SESSION_ID_KEY = "sessionId"
+    private const val HOST_KEY = "host"
+    private const val PORT_KEY = "port"
+    private const val AUTH_KEY = "auth"
+    private const val AUTH_PIN = "pin"
+    private const val AUTH_NONE = "none"
+}

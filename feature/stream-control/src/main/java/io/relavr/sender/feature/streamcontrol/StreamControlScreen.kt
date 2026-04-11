@@ -48,6 +48,7 @@ import io.relavr.sender.core.model.VideoResolution
 object StreamControlTestTags {
     const val START_BUTTON = "stream-start"
     const val STOP_BUTTON = "stream-stop"
+    const val SCAN_BUTTON = "stream-scan"
     const val AUDIO_SWITCH = "stream-audio-switch"
     const val SIGNALING_ENDPOINT_INPUT = "stream-signaling-endpoint"
     const val SESSION_ID_INPUT = "stream-session-id"
@@ -75,6 +76,7 @@ fun streamControlScreen(
     onSessionIdChanged: (String) -> Unit,
     onCodecPreferenceChanged: (CodecPreference) -> Unit,
     onAudioEnabledChanged: (Boolean) -> Unit,
+    onOpenScannerClicked: () -> Unit,
     onResolutionChanged: (VideoResolution) -> Unit,
     onFpsChanged: (Int) -> Unit,
     onBitrateChanged: (Int) -> Unit,
@@ -147,6 +149,7 @@ fun streamControlScreen(
                                 onSessionIdChanged = onSessionIdChanged,
                                 onCodecPreferenceChanged = onCodecPreferenceChanged,
                                 onAudioEnabledChanged = onAudioEnabledChanged,
+                                onOpenScannerClicked = onOpenScannerClicked,
                             )
                         }
                         Column(
@@ -178,6 +181,7 @@ fun streamControlScreen(
                         onSessionIdChanged = onSessionIdChanged,
                         onCodecPreferenceChanged = onCodecPreferenceChanged,
                         onAudioEnabledChanged = onAudioEnabledChanged,
+                        onOpenScannerClicked = onOpenScannerClicked,
                     )
                     streamProfileCard(
                         uiState = uiState,
@@ -236,6 +240,7 @@ private fun configCard(
     onSessionIdChanged: (String) -> Unit,
     onCodecPreferenceChanged: (CodecPreference) -> Unit,
     onAudioEnabledChanged: (Boolean) -> Unit,
+    onOpenScannerClicked: () -> Unit,
 ) {
     surfaceCard {
         Text(
@@ -282,6 +287,23 @@ private fun configCard(
         Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = "Quest 3 实机请填写开发机局域网地址，例如 ws://192.168.1.20:8080/ws；10.0.2.2 仅适用于 Android 模拟器。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = onOpenScannerClicked,
+            enabled = uiState.scanButtonEnabled,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .testTag(StreamControlTestTags.SCAN_BUTTON),
+        ) {
+            Text("扫码连接接收端")
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = uiState.scanStatusLabel,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -703,6 +725,7 @@ private fun streamControlScreenPreview() {
         onSessionIdChanged = {},
         onCodecPreferenceChanged = {},
         onAudioEnabledChanged = {},
+        onOpenScannerClicked = {},
         onResolutionChanged = {},
         onFpsChanged = {},
         onBitrateChanged = {},

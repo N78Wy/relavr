@@ -4,6 +4,7 @@ import io.relavr.sender.core.model.AudioStreamState
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.PublishState
+import io.relavr.sender.core.model.ReceiverConnectionInfo
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
 import io.relavr.sender.core.model.VideoResolution
@@ -32,6 +33,9 @@ data class StreamControlUiState(
     val signalingEndpoint: String,
     val sessionId: String,
     val configEditable: Boolean,
+    val scanButtonEnabled: Boolean,
+    val scannerVisible: Boolean,
+    val scanStatusLabel: String,
     val audioEnabled: Boolean,
     val audioToggleEnabled: Boolean,
     val audioStatusLabel: String,
@@ -46,6 +50,7 @@ data class StreamControlUiState(
 
 internal fun buildStreamControlUiState(
     config: StreamConfig,
+    scannerState: QrScannerState = QrScannerState(),
     sessionSnapshot: StreamingSessionSnapshot,
 ): StreamControlUiState {
     val capabilities = sessionSnapshot.capabilities
@@ -74,6 +79,9 @@ internal fun buildStreamControlUiState(
         signalingEndpoint = config.signalingEndpoint,
         sessionId = config.sessionId,
         configEditable = configEditable,
+        scanButtonEnabled = configEditable,
+        scannerVisible = scannerState.visible,
+        scanStatusLabel = scannerState.toStatusLabel(),
         audioEnabled = config.audioEnabled,
         audioToggleEnabled =
             configEditable &&
@@ -107,6 +115,12 @@ internal fun buildStreamControlUiState(
         errorMessage = sessionSnapshot.error?.message,
     )
 }
+
+data class QrScannerState(
+    val visible: Boolean = false,
+    val lastReceiver: ReceiverConnectionInfo? = null,
+    val errorMessage: String? = null,
+)
 
 private fun <T> buildSelectionOptions(
     options: List<T>,
@@ -206,3 +220,13 @@ private fun CodecPreference.toCodecOptionUiState(
         enabled = enabled,
     )
 }
+
+private fun QrScannerState.toStatusLabel(): String =
+    when {
+        visible -> "请将接收端二维码放到头显相机中央，识别后会自动开播"
+        errorMessage != null -> errorMessage
+        lastReceiver != null && lastReceiver.authRequired ->
+            "最近扫码：${lastReceiver.receiverName}（${lastReceiver.endpoint}），接收端仍需本地确认"
+        lastReceiver != null -> "最近扫码：${lastReceiver.receiverName}（${lastReceiver.endpoint}）"
+        else -> "扫描 receiver 控制台二维码后会自动回填地址并立即开播"
+    }
