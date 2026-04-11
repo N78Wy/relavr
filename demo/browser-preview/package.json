@@ -1,0 +1,14 @@
+{
+  "name": "@relavr/browser-preview-demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "lint": "node --check server.js src/*.js public/app.js scripts/format-check.js test/*.test.js",
+    "format:check": "node scripts/format-check.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "ws": "^8.18.2"
+  }
+}

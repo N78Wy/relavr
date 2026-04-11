@@ -20,6 +20,10 @@
   - `./gradlew lintDebug`
   - `./gradlew testDebugUnitTest`
   - `./gradlew connectedDebugAndroidTest`
+- 当前仓库包含 `demo/browser-preview` Node 局域网预览 demo；如改动该子工程，提交前必须至少通过以下命令：
+  - `cd demo/browser-preview && npm run format:check`
+  - `cd demo/browser-preview && npm run lint`
+  - `cd demo/browser-preview && npm run test`
 
 ## 文档与记忆
 

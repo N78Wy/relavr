@@ -167,6 +167,12 @@ private fun configCard(
                     .testTag(StreamControlTestTags.SIGNALING_ENDPOINT_INPUT),
         )
         Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "Quest 3 实机请填写开发机局域网地址，例如 ws://192.168.1.20:8080/ws；10.0.2.2 仅适用于 Android 模拟器。",
+            style = MaterialTheme.typography.bodySmall,
+            color = Color(0xFFB8D5F1),
+        )
+        Spacer(modifier = Modifier.height(12.dp))
         OutlinedTextField(
             value = uiState.sessionId,
             onValueChange = onSessionIdChanged,

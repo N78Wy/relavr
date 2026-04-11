@@ -8,6 +8,7 @@
 - `platform/media-codec`：编码能力探测与默认 CodecPolicy。
 - `platform/webrtc`：`ScreenCapturerAndroid + PeerConnection + WebSocket` 推流实现，负责 sender 侧 JSON 信令协议与 H.264 优先协商。
 - `testing/fakes`：供单元测试和集成测试复用的 fake 实现。
+- `demo/browser-preview`：Node 局域网联调工具，提供静态浏览器 receiver 页面与 demo 级 WebSocket 信令服务，不参与 Android 正式产物构建。
 
 ## 依赖方向
 - `app` 只组装依赖，不承载业务状态机。
@@ -20,15 +21,18 @@
 - 所有 Android 模块统一由 `build-logic` 里的 convention plugin 配置 compileSdk、minSdk、Compose、lint 与测试选项。
 - 版本统一维护在 `gradle/libs.versions.toml`。
 - 代码风格检查统一由 Spotless 驱动。
+- `gradle.properties` 当前将 `org.gradle.jvmargs` 固定为 `-Xmx1536m -Dfile.encoding=UTF-8`，避免在约 6 GiB 内存环境中因默认堆过大导致 `lintDebug` daemon 被系统杀死。
 
 ## Android 平台约束
 - MediaProjection 会话只能由 `app` 模块内的 `mediaProjection` 类型前台服务启动与持有；`feature`、`core`、`platform` 不得直接启动前台服务或绕过该入口创建投屏会话。
 - MediaProjection 系统授权必须逐次请求，不允许跨推流会话缓存并复用上一次授权结果；相关实现只能在单次开始流程内消费授权结果。
 - sender 侧 WebRTC 建链固定走 `WebSocket + JSON Offer/Answer` 协议，消息类型只包含 `join`、`offer`、`answer`、`ice-candidate`、`leave`、`error` 六类。
 - 首阶段 UI 只开放 `signalingEndpoint` 与 `sessionId` 输入；视频编码固定为 H.264，音频开关仅保留展示与后续扩展入口，不接入真实音轨。
+- `demo/browser-preview` 只支持单个 `sessionId` 下的一发一收；sender 可先于 receiver 启动，服务端负责缓存最新 `offer` 与 sender 侧 ICE candidate，供后加入的浏览器补齐建链。
 
 ## 测试基线
 - 单元测试至少覆盖 codec 选择策略、发送会话状态机与 ViewModel 行为。
 - 集成测试至少覆盖开始推流、失败回滚、停止释放。
 - Compose UI 测试至少覆盖发送控制台的开始/停止交互与错误展示入口。
 - 根目录验收命令固定为 `./gradlew spotlessCheck lintDebug testDebugUnitTest connectedDebugAndroidTest`。
+- `demo/browser-preview` 变更必须额外覆盖 Node 单元测试、Node 集成测试，并执行 `npm run format:check`、`npm run lint`、`npm run test`。

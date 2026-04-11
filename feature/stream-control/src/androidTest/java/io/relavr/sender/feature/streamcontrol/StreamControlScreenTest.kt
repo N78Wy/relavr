@@ -91,6 +91,28 @@ class StreamControlScreenTest {
     }
 
     @Test
+    fun `会显示Quest3实机局域网地址提示`() {
+        composeRule.setContent {
+            streamControlScreen(
+                uiState =
+                    buildStreamControlUiState(
+                        config = StreamConfig(),
+                        sessionSnapshot = StreamingSessionSnapshot(),
+                    ),
+                onSignalingEndpointChanged = {},
+                onSessionIdChanged = {},
+                onAudioEnabledChanged = {},
+                onStartClicked = {},
+                onStopClicked = {},
+            )
+        }
+
+        composeRule
+            .onNodeWithText("Quest 3 实机请填写开发机局域网地址，例如 ws://192.168.1.20:8080/ws；10.0.2.2 仅适用于 Android 模拟器。")
+            .fetchSemanticsNode()
+    }
+
+    @Test
     fun `非法配置时开始按钮禁用且输入会透传回调`() {
         var lastEndpoint = ""
         var lastSessionId = ""
