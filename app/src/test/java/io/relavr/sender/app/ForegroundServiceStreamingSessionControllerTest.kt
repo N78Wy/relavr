@@ -1,6 +1,7 @@
 package io.relavr.sender.app
 
 import io.relavr.sender.core.model.CaptureState
+import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
@@ -39,6 +40,7 @@ class ForegroundServiceStreamingSessionControllerTest {
             val config =
                 StreamConfig(
                     audioEnabled = false,
+                    codecPreference = CodecPreference.HEVC,
                     signalingEndpoint = VALID_SIGNALING_ENDPOINT,
                 )
             controller.start(config)

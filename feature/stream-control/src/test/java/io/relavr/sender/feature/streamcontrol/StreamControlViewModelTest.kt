@@ -1,6 +1,8 @@
 package io.relavr.sender.feature.streamcontrol
 
+import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CodecPreference
+import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.testing.fakes.FakeStreamingSessionController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -39,7 +41,8 @@ class StreamControlViewModelTest {
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
-            assertEquals(CodecPreference.H264.displayName, state.codecLabel)
+            assertEquals(CodecPreference.H264, state.codecOptions.single { it.selected }.preference)
+            assertTrue(state.codecOptions.any { it.preference == CodecPreference.HEVC && it.enabled })
             assertEquals("", state.signalingEndpoint)
             assertTrue(state.sessionId.isNotBlank())
             assertTrue(state.audioEnabled)
@@ -54,12 +57,39 @@ class StreamControlViewModelTest {
 
             viewModel.onSignalingEndpointChanged("wss://signal.example/ws")
             viewModel.onSessionIdChanged("room-42")
+            viewModel.onCodecPreferenceChanged(CodecPreference.HEVC)
             viewModel.onStartClicked()
             advanceUntilIdle()
 
             assertEquals(1, controller.startCount)
             assertEquals("wss://signal.example/ws", controller.lastStartConfig?.signalingEndpoint)
             assertEquals("room-42", controller.lastStartConfig?.sessionId)
+            assertEquals(CodecPreference.HEVC, controller.lastStartConfig?.codecPreference)
             assertTrue(controller.lastStartConfig?.audioEnabled ?: false)
+        }
+
+    @Test
+    fun `能力刷新后会把无效编码归一到默认编码`() =
+        runTest(dispatcher.scheduler) {
+            val controller =
+                FakeStreamingSessionController(
+                    capabilitySnapshot =
+                        CapabilitySnapshot(
+                            supportedCodecs = setOf(CodecPreference.HEVC, CodecPreference.VP8),
+                            audioPlaybackCaptureSupported = true,
+                            defaultCodec = CodecPreference.HEVC,
+                        ),
+                )
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = controller,
+                    initialConfig = StreamConfig(codecPreference = CodecPreference.VP9),
+                )
+
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(CodecPreference.HEVC, state.codecOptions.single { it.selected }.preference)
+            assertEquals("当前选择为设备推荐默认：H.265 / HEVC", state.codecStatusLabel)
         }
 }

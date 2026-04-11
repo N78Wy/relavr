@@ -7,11 +7,20 @@ import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
 
+data class CodecOptionUiState(
+    val preference: CodecPreference,
+    val label: String,
+    val supportLabel: String,
+    val selected: Boolean,
+    val enabled: Boolean,
+)
+
 data class StreamControlUiState(
     val title: String,
     val statusLabel: String,
     val statusDescription: String,
-    val codecLabel: String,
+    val codecOptions: List<CodecOptionUiState>,
+    val codecStatusLabel: String,
     val signalingEndpoint: String,
     val sessionId: String,
     val configEditable: Boolean,
@@ -44,7 +53,15 @@ internal fun buildStreamControlUiState(
         title = "Quest 3 发送控制台",
         statusLabel = sessionSnapshot.toStatusLabel(),
         statusDescription = sessionSnapshot.toStatusDescription(config),
-        codecLabel = CodecPreference.H264.displayName,
+        codecOptions =
+            CodecPreference.entries.map { preference ->
+                preference.toCodecOptionUiState(
+                    selectedPreference = config.codecPreference,
+                    capabilities = capabilities,
+                    configEditable = configEditable,
+                )
+            },
+        codecStatusLabel = sessionSnapshot.toCodecStatusLabel(config),
         signalingEndpoint = config.signalingEndpoint,
         sessionId = config.sessionId,
         configEditable = configEditable,
@@ -97,3 +114,55 @@ private fun StreamingSessionSnapshot.toAudioStatusLabel(config: StreamConfig): S
         audioState == AudioStreamState.Degraded -> audioDetail ?: "音频已降级为静音/仅视频"
         else -> "开始推流后会采集系统播放音频"
     }
+
+private fun StreamingSessionSnapshot.toCodecStatusLabel(config: StreamConfig): String {
+    val requestedCodec = config.codecPreference.displayName
+    val resolvedCodec = codecSelection?.resolved?.displayName
+    val capabilitySnapshot = capabilities
+    return when {
+        codecSelection?.fellBack == true && resolvedCodec != null ->
+            "本次请求 $requestedCodec，实际使用 $resolvedCodec"
+        resolvedCodec != null -> "本次会话使用 $resolvedCodec"
+        capabilitySnapshot == null ->
+            "默认优先 ${CodecPreference.H264.displayName}，正在探测设备与 WebRTC 编码能力"
+        capabilitySnapshot.supports(config.codecPreference) &&
+            capabilitySnapshot.defaultCodec == config.codecPreference ->
+            "当前选择为设备推荐默认：$requestedCodec"
+        capabilitySnapshot.supports(config.codecPreference) ->
+            "当前选择 $requestedCodec；设备推荐默认 ${capabilitySnapshot.defaultCodec.displayName}"
+        capabilitySnapshot.supportedCodecs.isEmpty() ->
+            "当前设备没有可用的视频编码能力"
+        else ->
+            "当前设备不支持 $requestedCodec，开始推流时会回退到 ${capabilitySnapshot.defaultCodec.displayName}"
+    }
+}
+
+private fun CodecPreference.toCodecOptionUiState(
+    selectedPreference: CodecPreference,
+    capabilities: io.relavr.sender.core.model.CapabilitySnapshot?,
+    configEditable: Boolean,
+): CodecOptionUiState {
+    val isSupported = capabilities?.supports(this) == true
+    val enabled =
+        configEditable &&
+            when {
+                capabilities == null -> this == CodecPreference.H264
+                else -> isSupported
+            }
+    val supportLabel =
+        when {
+            capabilities == null && this == CodecPreference.H264 -> "默认优先"
+            capabilities == null -> "等待能力探测"
+            isSupported && capabilities.defaultCodec == this -> "设备推荐默认"
+            isSupported -> "设备支持"
+            else -> "设备或 WebRTC 不支持"
+        }
+
+    return CodecOptionUiState(
+        preference = this,
+        label = displayName,
+        supportLabel = supportLabel,
+        selected = selectedPreference == this,
+        enabled = enabled,
+    )
+}

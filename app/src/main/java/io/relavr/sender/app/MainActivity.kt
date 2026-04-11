@@ -64,6 +64,7 @@ class MainActivity : ComponentActivity() {
                         uiState = uiState,
                         onSignalingEndpointChanged = viewModel::onSignalingEndpointChanged,
                         onSessionIdChanged = viewModel::onSessionIdChanged,
+                        onCodecPreferenceChanged = viewModel::onCodecPreferenceChanged,
                         onAudioEnabledChanged = viewModel::onAudioEnabledChanged,
                         onStartClicked = viewModel::onStartClicked,
                         onStopClicked = viewModel::onStopClicked,

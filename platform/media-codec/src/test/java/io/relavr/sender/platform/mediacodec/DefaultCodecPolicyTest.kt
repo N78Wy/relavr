@@ -19,6 +19,7 @@ class DefaultCodecPolicyTest {
                     CapabilitySnapshot(
                         supportedCodecs = setOf(CodecPreference.H264, CodecPreference.HEVC),
                         audioPlaybackCaptureSupported = true,
+                        defaultCodec = CodecPreference.H264,
                     ),
             )
 
@@ -35,10 +36,28 @@ class DefaultCodecPolicyTest {
                     CapabilitySnapshot(
                         supportedCodecs = setOf(CodecPreference.H264, CodecPreference.HEVC),
                         audioPlaybackCaptureSupported = true,
+                        defaultCodec = CodecPreference.H264,
                     ),
             )
 
         assertEquals(CodecPreference.H264, selection.resolved)
+        assertTrue(selection.fellBack)
+    }
+
+    @Test
+    fun `H264 不可用时回退到设备默认编码`() {
+        val selection =
+            policy.select(
+                preference = CodecPreference.H264,
+                capabilities =
+                    CapabilitySnapshot(
+                        supportedCodecs = setOf(CodecPreference.HEVC, CodecPreference.VP8),
+                        audioPlaybackCaptureSupported = true,
+                        defaultCodec = CodecPreference.HEVC,
+                    ),
+            )
+
+        assertEquals(CodecPreference.HEVC, selection.resolved)
         assertTrue(selection.fellBack)
     }
 

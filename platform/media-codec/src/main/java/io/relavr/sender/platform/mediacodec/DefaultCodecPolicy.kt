@@ -12,11 +12,16 @@ class DefaultCodecPolicy : CodecPolicy {
         preference: CodecPreference,
         capabilities: CapabilitySnapshot,
     ): CodecSelection {
+        val defaultCodec =
+            capabilities.defaultCodec.takeIf(capabilities::supports)
+                ?: CapabilitySnapshot
+                    .resolveDefaultCodec(capabilities.supportedCodecs)
+                    .takeIf(capabilities::supports)
         val resolved =
             when {
                 capabilities.supports(preference) -> preference
-                capabilities.supports(CodecPreference.H264) -> CodecPreference.H264
-                else -> FALLBACK_ORDER.firstOrNull(capabilities::supports)
+                defaultCodec != null -> defaultCodec
+                else -> null
             } ?: throw SenderException(
                 SenderError.CapabilityUnavailable("设备未报告可用的视频编码能力"),
             )
@@ -26,14 +31,5 @@ class DefaultCodecPolicy : CodecPolicy {
             resolved = resolved,
             fellBack = resolved != preference,
         )
-    }
-
-    private companion object {
-        val FALLBACK_ORDER =
-            listOf(
-                CodecPreference.HEVC,
-                CodecPreference.VP8,
-                CodecPreference.VP9,
-            )
     }
 }

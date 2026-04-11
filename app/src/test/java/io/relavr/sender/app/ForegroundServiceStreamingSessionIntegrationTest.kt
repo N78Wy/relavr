@@ -1,6 +1,7 @@
 package io.relavr.sender.app
 
 import io.relavr.sender.core.model.AudioStreamState
+import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.PublishState
@@ -37,7 +38,15 @@ class ForegroundServiceStreamingSessionIntegrationTest {
                 StreamingSessionCoordinator(
                     projectionPermissionGateway = FakeProjectionPermissionGateway(nextAccess = projectionAccess),
                     audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(FakeAudioCaptureSource()),
-                    codecCapabilityRepository = FakeCodecCapabilityRepository(),
+                    codecCapabilityRepository =
+                        FakeCodecCapabilityRepository(
+                            snapshot =
+                                CapabilitySnapshot(
+                                    supportedCodecs = setOf(CodecPreference.H264, CodecPreference.HEVC),
+                                    audioPlaybackCaptureSupported = true,
+                                    defaultCodec = CodecPreference.H264,
+                                ),
+                        ),
                     codecPolicy = FakeCodecPolicy(),
                     rtcPublisherFactory = rtcPublisherFactory,
                     signalingClient = signalingClient,
@@ -58,7 +67,7 @@ class ForegroundServiceStreamingSessionIntegrationTest {
 
             val config =
                 StreamConfig(
-                    codecPreference = CodecPreference.H264,
+                    codecPreference = CodecPreference.HEVC,
                     signalingEndpoint = VALID_SIGNALING_ENDPOINT,
                 )
             controller.start(config)
@@ -75,6 +84,7 @@ class ForegroundServiceStreamingSessionIntegrationTest {
             assertEquals(PublishState.Publishing, controller.observeState().value.publishState)
             assertEquals(AudioStreamState.Publishing, controller.observeState().value.audioState)
             assertEquals("WebRTC 已连接，正在发送音视频", controller.observeState().value.statusDetail)
+            assertEquals(CodecPreference.HEVC, signalingClient.lastOpenedConfig?.codecPreference)
             assertEquals(1, rtcPublisherFactory.session.publishCount)
             assertEquals(1, signalingClient.openCount)
         }

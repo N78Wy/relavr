@@ -3,12 +3,16 @@ package io.relavr.sender.feature.streamcontrol
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.session.StreamingSessionController
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -42,6 +46,24 @@ class StreamControlViewModel(
         viewModelScope.launch {
             sessionController.refreshCapabilities()
         }
+        viewModelScope.launch {
+            sessionController
+                .observeState()
+                .map { snapshot -> snapshot.capabilities }
+                .distinctUntilChanged()
+                .collect { capabilities ->
+                    if (capabilities == null || capabilities.supportedCodecs.isEmpty()) {
+                        return@collect
+                    }
+                    config.update { current ->
+                        if (capabilities.supports(current.codecPreference)) {
+                            current
+                        } else {
+                            current.copy(codecPreference = capabilities.defaultCodec)
+                        }
+                    }
+                }
+        }
     }
 
     fun onSignalingEndpointChanged(endpoint: String) {
@@ -53,6 +75,12 @@ class StreamControlViewModel(
     fun onSessionIdChanged(sessionId: String) {
         config.update { current ->
             current.copy(sessionId = sessionId)
+        }
+    }
+
+    fun onCodecPreferenceChanged(codecPreference: CodecPreference) {
+        config.update { current ->
+            current.copy(codecPreference = codecPreference)
         }
     }
 

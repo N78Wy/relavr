@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +33,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
 
@@ -41,6 +43,8 @@ object StreamControlTestTags {
     const val AUDIO_SWITCH = "stream-audio-switch"
     const val SIGNALING_ENDPOINT_INPUT = "stream-signaling-endpoint"
     const val SESSION_ID_INPUT = "stream-session-id"
+
+    fun codecOption(preference: CodecPreference): String = "stream-codec-option-${preference.name.lowercase()}"
 }
 
 @Composable
@@ -48,6 +52,7 @@ fun streamControlScreen(
     uiState: StreamControlUiState,
     onSignalingEndpointChanged: (String) -> Unit,
     onSessionIdChanged: (String) -> Unit,
+    onCodecPreferenceChanged: (CodecPreference) -> Unit,
     onAudioEnabledChanged: (Boolean) -> Unit,
     onStartClicked: () -> Unit,
     onStopClicked: () -> Unit,
@@ -86,6 +91,7 @@ fun streamControlScreen(
                     uiState = uiState,
                     onSignalingEndpointChanged = onSignalingEndpointChanged,
                     onSessionIdChanged = onSessionIdChanged,
+                    onCodecPreferenceChanged = onCodecPreferenceChanged,
                     onAudioEnabledChanged = onAudioEnabledChanged,
                 )
             }
@@ -140,6 +146,7 @@ private fun configCard(
     uiState: StreamControlUiState,
     onSignalingEndpointChanged: (String) -> Unit,
     onSessionIdChanged: (String) -> Unit,
+    onCodecPreferenceChanged: (CodecPreference) -> Unit,
     onAudioEnabledChanged: (Boolean) -> Unit,
 ) {
     surfaceCard {
@@ -150,11 +157,26 @@ private fun configCard(
         )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = "视频编码固定为 ${uiState.codecLabel}",
+            text = "视频编码",
             style = MaterialTheme.typography.bodyMedium,
             color = Color(0xFFD6E2F0),
         )
         Spacer(modifier = Modifier.height(12.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            uiState.codecOptions.forEach { option ->
+                codecOptionButton(
+                    option = option,
+                    onSelected = onCodecPreferenceChanged,
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = uiState.codecStatusLabel,
+            style = MaterialTheme.typography.bodySmall,
+            color = Color(0xFFB8D5F1),
+        )
+        Spacer(modifier = Modifier.height(16.dp))
         OutlinedTextField(
             value = uiState.signalingEndpoint,
             onValueChange = onSignalingEndpointChanged,
@@ -215,6 +237,64 @@ private fun configCard(
                 enabled = uiState.audioToggleEnabled,
                 modifier = Modifier.testTag(StreamControlTestTags.AUDIO_SWITCH),
             )
+        }
+    }
+}
+
+@Composable
+private fun codecOptionButton(
+    option: CodecOptionUiState,
+    onSelected: (CodecPreference) -> Unit,
+) {
+    val modifier =
+        Modifier
+            .fillMaxWidth()
+            .testTag(StreamControlTestTags.codecOption(option.preference))
+
+    if (option.selected) {
+        Button(
+            onClick = { onSelected(option.preference) },
+            enabled = option.enabled,
+            modifier = modifier,
+            colors =
+                ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF245C87),
+                    contentColor = Color.White,
+                    disabledContainerColor = Color(0xFF2B3E52),
+                    disabledContentColor = Color(0xFFB8D5F1),
+                ),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+        ) {
+            Column(horizontalAlignment = Alignment.Start, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = option.label,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "已选中 · ${option.supportLabel}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    } else {
+        OutlinedButton(
+            onClick = { onSelected(option.preference) },
+            enabled = option.enabled,
+            modifier = modifier,
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+        ) {
+            Column(horizontalAlignment = Alignment.Start, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = option.label,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = option.supportLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
     }
 }
@@ -355,6 +435,7 @@ private fun streamControlScreenPreview() {
             ),
         onSignalingEndpointChanged = {},
         onSessionIdChanged = {},
+        onCodecPreferenceChanged = {},
         onAudioEnabledChanged = {},
         onStartClicked = {},
         onStopClicked = {},

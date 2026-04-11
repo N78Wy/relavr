@@ -10,7 +10,7 @@
 ## 默认实现策略
 - 使用 Kotlin + Gradle Kotlin DSL + Jetpack Compose + Coroutines/Flow。
 - 采用中度扩展的 Android 多模块结构，保留 `app`、`feature`、`core`、`platform`、`testing` 分层。
-- 默认编码偏好固定为 H.264；HEVC、VP8、VP9 通过能力探测决定是否展示。
+- 默认编码偏好为 H.264 优先；发送控制台支持在开播前切换到 HEVC、VP8、VP9，实际可选集合由设备 MediaCodec 与 libwebrtc 能力交集决定。
 - 音频按独立模块接缝设计，首版先预留 AudioPlaybackCapture 能力与错误模型，不引入 native WebRTC 音频扩展。
 
 ## 非目标

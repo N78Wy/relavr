@@ -11,6 +11,7 @@ import io.relavr.sender.platform.androidcapture.AndroidProjectionPermissionGatew
 import io.relavr.sender.platform.androidcapture.PlaybackAudioCaptureSourceFactory
 import io.relavr.sender.platform.mediacodec.AndroidMediaCodecCapabilityRepository
 import io.relavr.sender.platform.mediacodec.DefaultCodecPolicy
+import io.relavr.sender.platform.webrtc.DefaultWebRtcCodecSupportProvider
 import io.relavr.sender.platform.webrtc.WebRtcPublisherFactory
 import io.relavr.sender.platform.webrtc.WebSocketSignalingClient
 
@@ -27,7 +28,11 @@ class AppContainer(
         StreamingSessionCoordinator(
             projectionPermissionGateway = projectionPermissionGateway,
             audioCaptureSourceFactory = PlaybackAudioCaptureSourceFactory(application),
-            codecCapabilityRepository = AndroidMediaCodecCapabilityRepository(DefaultAppDispatchers),
+            codecCapabilityRepository =
+                CombinedCodecCapabilityRepository(
+                    androidCapabilityRepository = AndroidMediaCodecCapabilityRepository(DefaultAppDispatchers),
+                    webRtcCodecSupportProvider = DefaultWebRtcCodecSupportProvider(),
+                ),
             codecPolicy = DefaultCodecPolicy(),
             rtcPublisherFactory = WebRtcPublisherFactory(application, AndroidAppLogger),
             signalingClient = WebSocketSignalingClient(logger = AndroidAppLogger),

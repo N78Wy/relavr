@@ -5,8 +5,8 @@
 - `core/model`：配置、能力快照、状态、错误模型与信令配置校验。
 - `core/session`：发送会话编排层，定义授权、音频接缝、推流、信令消息与 RTC 事件边界接口。
 - `platform/android-capture`：MediaProjection 授权桥接与 AudioPlaybackCapture 接缝实现。
-- `platform/media-codec`：编码能力探测与默认 CodecPolicy。
-- `platform/webrtc`：`ScreenCapturerAndroid + PeerConnection + WebSocket` 推流实现，负责 sender 侧 JSON 信令协议与 H.264 优先协商。
+- `platform/media-codec`：编码能力探测、默认 CodecPolicy 与 codec fallback 策略。
+- `platform/webrtc`：`ScreenCapturerAndroid + PeerConnection + WebSocket` 推流实现，负责 sender 侧 JSON 信令协议、WebRTC codec 能力探测与按编码偏好排序的 SDP 协商。
 - `testing/fakes`：供单元测试和集成测试复用的 fake 实现。
 - `demo/browser-preview`：Node 局域网联调工具，提供静态浏览器 receiver 页面与 demo 级 WebSocket 信令服务，不参与 Android 正式产物构建。
 
@@ -28,7 +28,7 @@
 - MediaProjection 系统授权必须逐次请求，不允许跨推流会话缓存并复用上一次授权结果；相关实现只能在单次开始流程内消费授权结果。
 - sender 侧 WebRTC 建链固定走 `WebSocket + JSON Offer/Answer` 协议，消息类型只包含 `join`、`offer`、`answer`、`ice-candidate`、`leave`、`error` 六类。
 - sender 既然固定依赖 WebSocket 信令、WebRTC 网络状态监测与系统播放音频采集，`app` manifest 必须同时声明 `android.permission.INTERNET`、`android.permission.ACCESS_NETWORK_STATE` 与 `android.permission.RECORD_AUDIO`；缺少前两者会直接导致建链或网络监测失败，缺少后者则必须走视频-only 降级。
-- 发送控制台固定开放 `signalingEndpoint`、`sessionId` 与音频开关；视频编码固定为 H.264，音频默认开启。若用户未关闭音频，开始推流前必须先由 `app` 层预检 `RECORD_AUDIO` 运行时权限，但即使用户拒绝，也只能降级为仅视频，不能直接中断整个会话。
+- 发送控制台固定开放 `signalingEndpoint`、`sessionId`、编码选择与音频开关；编码选择只能在开播前修改，默认优先 H.264，并且只展示设备 MediaCodec 与 libwebrtc 交集后的可用编码。若用户未关闭音频，开始推流前必须先由 `app` 层预检 `RECORD_AUDIO` 运行时权限，但即使用户拒绝，也只能降级为仅视频，不能直接中断整个会话。
 - sender 真实音频固定通过同一 `MediaProjection` 会话上的 `AudioPlaybackCapture + JavaAudioDeviceModule.AudioBufferCallback` 接入 WebRTC，不允许回退到麦克风采集或额外实现独立混音链路。
 - 当前联调版本在应用层允许 `ws://` 明文信令，以兼容 Android 模拟器 `10.0.2.2` 和开发机局域网地址；如后续切换为 `wss://`，必须同步收紧 manifest 策略并更新对应回归测试。
 - 运行时音频异常只允许降级到静音/仅视频，不做中途 renegotiation；会话主状态继续保持推流中，音频细节通过独立的 `audioState` / `audioDetail` 对外暴露。

@@ -12,7 +12,10 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.relavr.sender.core.model.AudioStreamState
+import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CaptureState
+import io.relavr.sender.core.model.CodecPreference
+import io.relavr.sender.core.model.CodecSelection
 import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
@@ -42,6 +45,7 @@ class StreamControlScreenTest {
                 uiState = uiState,
                 onSignalingEndpointChanged = {},
                 onSessionIdChanged = {},
+                onCodecPreferenceChanged = {},
                 onAudioEnabledChanged = {},
                 onStartClicked = { startCount += 1 },
                 onStopClicked = { stopCount += 1 },
@@ -82,6 +86,7 @@ class StreamControlScreenTest {
                     ),
                 onSignalingEndpointChanged = {},
                 onSessionIdChanged = {},
+                onCodecPreferenceChanged = {},
                 onAudioEnabledChanged = {},
                 onStartClicked = {},
                 onStopClicked = {},
@@ -102,6 +107,7 @@ class StreamControlScreenTest {
                     ),
                 onSignalingEndpointChanged = {},
                 onSessionIdChanged = {},
+                onCodecPreferenceChanged = {},
                 onAudioEnabledChanged = {},
                 onStartClicked = {},
                 onStopClicked = {},
@@ -136,6 +142,7 @@ class StreamControlScreenTest {
                     lastSessionId = it
                     uiState = uiState.copy(sessionId = it)
                 },
+                onCodecPreferenceChanged = {},
                 onAudioEnabledChanged = {},
                 onStartClicked = {},
                 onStopClicked = {},
@@ -171,6 +178,7 @@ class StreamControlScreenTest {
                     ),
                 onSignalingEndpointChanged = {},
                 onSessionIdChanged = {},
+                onCodecPreferenceChanged = {},
                 onAudioEnabledChanged = { audioEnabled = it },
                 onStartClicked = {},
                 onStopClicked = {},
@@ -180,6 +188,78 @@ class StreamControlScreenTest {
         composeRule.onNodeWithText("音频已降级为静音/仅视频").fetchSemanticsNode()
         composeRule.onNodeWithTag(StreamControlTestTags.AUDIO_SWITCH).performClick()
         assertEquals(false, audioEnabled)
+    }
+
+    @Test
+    fun `编码选项可切换且不支持项禁用`() {
+        var selectedCodec = CodecPreference.H264
+
+        composeRule.setContent {
+            streamControlScreen(
+                uiState =
+                    buildStreamControlUiState(
+                        config =
+                            StreamConfig(
+                                signalingEndpoint = VALID_SIGNALING_ENDPOINT,
+                                codecPreference = selectedCodec,
+                            ),
+                        sessionSnapshot =
+                            StreamingSessionSnapshot(
+                                capabilities =
+                                    CapabilitySnapshot(
+                                        supportedCodecs = setOf(CodecPreference.H264, CodecPreference.HEVC),
+                                        audioPlaybackCaptureSupported = true,
+                                        defaultCodec = CodecPreference.H264,
+                                    ),
+                            ),
+                    ),
+                onSignalingEndpointChanged = {},
+                onSessionIdChanged = {},
+                onCodecPreferenceChanged = { selectedCodec = it },
+                onAudioEnabledChanged = {},
+                onStartClicked = {},
+                onStopClicked = {},
+            )
+        }
+
+        composeRule.onNodeWithTag(StreamControlTestTags.codecOption(CodecPreference.HEVC)).performClick()
+        composeRule.onNodeWithTag(StreamControlTestTags.codecOption(CodecPreference.VP9)).assertIsNotEnabled()
+        assertEquals(CodecPreference.HEVC, selectedCodec)
+    }
+
+    @Test
+    fun `编码回退时会显示请求与实际编码`() {
+        composeRule.setContent {
+            streamControlScreen(
+                uiState =
+                    buildStreamControlUiState(
+                        config =
+                            StreamConfig(
+                                signalingEndpoint = VALID_SIGNALING_ENDPOINT,
+                                codecPreference = CodecPreference.HEVC,
+                            ),
+                        sessionSnapshot =
+                            StreamingSessionSnapshot(
+                                codecSelection =
+                                    CodecSelection(
+                                        requested = CodecPreference.HEVC,
+                                        resolved = CodecPreference.H264,
+                                        fellBack = true,
+                                    ),
+                            ),
+                    ),
+                onSignalingEndpointChanged = {},
+                onSessionIdChanged = {},
+                onCodecPreferenceChanged = {},
+                onAudioEnabledChanged = {},
+                onStartClicked = {},
+                onStopClicked = {},
+            )
+        }
+
+        composeRule
+            .onNodeWithText("本次请求 H.265 / HEVC，实际使用 H.264 / AVC")
+            .fetchSemanticsNode()
     }
 
     private fun validConfig() = StreamConfig(signalingEndpoint = VALID_SIGNALING_ENDPOINT)

@@ -31,7 +31,7 @@ class AndroidMediaCodecCapabilityRepository(
             CapabilitySnapshot(
                 supportedCodecs = supportedCodecs,
                 audioPlaybackCaptureSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q,
-                defaultCodec = CodecPreference.H264,
+                defaultCodec = CapabilitySnapshot.resolveDefaultCodec(supportedCodecs),
             )
         }
 }

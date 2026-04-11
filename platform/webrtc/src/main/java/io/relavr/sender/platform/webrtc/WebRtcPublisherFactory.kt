@@ -5,7 +5,6 @@ import android.content.Intent
 import android.media.projection.MediaProjection
 import io.relavr.sender.core.common.AppLogger
 import io.relavr.sender.core.model.AudioStreamState
-import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.session.AudioCaptureSource
@@ -168,11 +167,10 @@ private class WebRtcPublishSession(
         val preferredOffer =
             SessionDescription(
                 rawOffer.type,
-                if (config.codecPreference == CodecPreference.H264) {
-                    SdpCodecPreference.preferVideoCodec(rawOffer.description, "H264")
-                } else {
-                    rawOffer.description
-                },
+                SdpCodecPreference.preferVideoCodec(
+                    rawOffer.description,
+                    config.codecPreference.webrtcCodecName,
+                ),
             )
         peer.awaitSetLocalDescription(preferredOffer)
         signalingSession.send(
