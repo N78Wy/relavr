@@ -21,6 +21,10 @@
 - 版本统一维护在 `gradle/libs.versions.toml`。
 - 代码风格检查统一由 Spotless 驱动。
 
+## Android 平台约束
+- MediaProjection 会话只能由 `app` 模块内的 `mediaProjection` 类型前台服务启动与持有；`feature`、`core`、`platform` 不得直接启动前台服务或绕过该入口创建投屏会话。
+- MediaProjection 系统授权必须逐次请求，不允许跨推流会话缓存并复用上一次授权结果；相关实现只能在单次开始流程内消费授权结果。
+
 ## 测试基线
 - 单元测试至少覆盖 codec 选择策略、发送会话状态机与 ViewModel 行为。
 - 集成测试至少覆盖开始推流、失败回滚、停止释放。

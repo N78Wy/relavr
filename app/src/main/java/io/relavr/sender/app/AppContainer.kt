@@ -23,7 +23,7 @@ class AppContainer(
 
     val projectionPermissionGateway = AndroidProjectionPermissionGateway(mediaProjectionManager)
 
-    private val sessionController: StreamingSessionController =
+    internal val sessionEngine: StreamingSessionController =
         StreamingSessionCoordinator(
             projectionPermissionGateway = projectionPermissionGateway,
             videoCaptureSourceFactory = MediaProjectionVideoCaptureSourceFactory(mediaProjectionManager),
@@ -32,6 +32,17 @@ class AppContainer(
             codecPolicy = DefaultCodecPolicy(),
             rtcPublisherFactory = LoggingRtcPublisherFactory(),
             signalingClient = NoOpSignalingClient(),
+            dispatchers = DefaultAppDispatchers,
+            logger = AndroidAppLogger,
+        )
+
+    private val foregroundServiceCommandDispatcher =
+        AndroidForegroundServiceCommandDispatcher(application)
+
+    private val sessionController: StreamingSessionController =
+        ForegroundServiceStreamingSessionController(
+            sessionEngine = sessionEngine,
+            commandDispatcher = foregroundServiceCommandDispatcher,
             dispatchers = DefaultAppDispatchers,
             logger = AndroidAppLogger,
         )

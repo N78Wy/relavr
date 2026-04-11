@@ -85,7 +85,12 @@ class StreamingSessionCoordinatorTest {
             assertEquals(PublishState.Error, state.publishState)
             assertEquals(SenderError.PermissionDenied, state.error)
             assertEquals(1, logger.errorLogs.size)
-            assertTrue(logger.errorLogs.single().message.contains("请求投屏权限失败"))
+            assertTrue(
+                logger.errorLogs
+                    .single()
+                    .message
+                    .contains("请求投屏权限失败"),
+            )
             assertNotNull(logger.errorLogs.single().throwable)
         }
 
@@ -156,8 +161,18 @@ class StreamingSessionCoordinatorTest {
             assertEquals(PublishState.Error, state.publishState)
             assertEquals(SenderError.SessionStartFailed("fake-publish-failure"), state.error)
             assertEquals(1, logger.errorLogs.size)
-            assertTrue(logger.errorLogs.single().message.contains("启动推流会话失败"))
-            assertTrue(logger.errorLogs.single().message.contains("fake-publish-failure"))
+            assertTrue(
+                logger.errorLogs
+                    .single()
+                    .message
+                    .contains("启动推流会话失败"),
+            )
+            assertTrue(
+                logger.errorLogs
+                    .single()
+                    .message
+                    .contains("fake-publish-failure"),
+            )
             assertNotNull(logger.errorLogs.single().throwable)
         }
 }

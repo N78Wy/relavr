@@ -16,7 +16,6 @@ class AndroidProjectionPermissionGateway(
 ) : ProjectionPermissionGateway {
     private val _permissionRequests = MutableSharedFlow<Intent>(extraBufferCapacity = 1)
     private var pendingRequest: CompletableDeferred<ProjectionAccess>? = null
-    private var cachedAccess: AndroidProjectionAccess? = null
 
     val permissionRequests: SharedFlow<Intent> = _permissionRequests.asSharedFlow()
 
@@ -28,7 +27,7 @@ class AndroidProjectionPermissionGateway(
         return deferred.await()
     }
 
-    override fun restoreIfAvailable(): ProjectionAccess? = cachedAccess?.copyWithFreshIntent()
+    override fun restoreIfAvailable(): ProjectionAccess? = null
 
     fun onPermissionResult(
         resultCode: Int,
@@ -47,7 +46,6 @@ class AndroidProjectionPermissionGateway(
                     resultCode = resultCode,
                     resultData = Intent(data),
                 )
-            cachedAccess = access
             deferred.complete(access.copyWithFreshIntent())
         } else {
             deferred.completeExceptionally(PermissionDeniedException())
