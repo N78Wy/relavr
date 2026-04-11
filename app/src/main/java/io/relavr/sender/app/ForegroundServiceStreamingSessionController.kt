@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 internal class ForegroundServiceStreamingSessionController(
     private val sessionEngine: StreamingSessionController,
     private val commandDispatcher: ForegroundServiceCommandDispatcher,
+    private val recordAudioPermissionGateway: RecordAudioPermissionGateway,
     dispatchers: AppDispatchers,
     private val logger: AppLogger,
 ) : StreamingSessionController {
@@ -44,6 +45,18 @@ internal class ForegroundServiceStreamingSessionController(
                 statusDetail = "正在启动前台推流服务",
                 error = null,
             )
+        }
+        if (config.audioEnabled) {
+            runCatching {
+                recordAudioPermissionGateway.requestPermissionIfNeeded()
+            }.onFailure { throwable ->
+                reportFailure(
+                    error = SenderError.SessionStartFailed(throwable.message ?: "无法请求录音权限"),
+                    throwable = throwable,
+                    operation = "请求录音权限失败",
+                )
+                return
+            }
         }
         runCatching {
             commandDispatcher.startSession(config)

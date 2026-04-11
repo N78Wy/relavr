@@ -92,14 +92,14 @@
             <section class="panel preview-panel">
                 <div class="panel-head">
                     <h2>实时预览</h2>
-                    <p>当前阶段只接收视频轨，不播放音频。</p>
+                    <p>当前页面会接收并播放远端音视频；如果浏览器拦截自动播放，请手动点击播放并打开声音。</p>
                 </div>
                 <div class="video-frame">
                     <video
                         id="remote-video"
                         autoplay
+                        controls
                         playsinline
-                        muted
                     ></video>
                     <div
                         id="video-placeholder"

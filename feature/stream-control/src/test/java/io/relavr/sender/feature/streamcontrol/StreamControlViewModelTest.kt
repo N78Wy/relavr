@@ -42,6 +42,7 @@ class StreamControlViewModelTest {
             assertEquals(CodecPreference.H264.displayName, state.codecLabel)
             assertEquals("", state.signalingEndpoint)
             assertTrue(state.sessionId.isNotBlank())
+            assertTrue(state.audioEnabled)
             assertFalse(state.startEnabled)
         }
 
@@ -59,6 +60,6 @@ class StreamControlViewModelTest {
             assertEquals(1, controller.startCount)
             assertEquals("wss://signal.example/ws", controller.lastStartConfig?.signalingEndpoint)
             assertEquals("room-42", controller.lastStartConfig?.sessionId)
-            assertFalse(controller.lastStartConfig?.audioEnabled ?: true)
+            assertTrue(controller.lastStartConfig?.audioEnabled ?: false)
         }
 }

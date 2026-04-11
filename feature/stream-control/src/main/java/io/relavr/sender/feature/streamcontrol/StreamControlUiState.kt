@@ -1,5 +1,6 @@
 package io.relavr.sender.feature.streamcontrol
 
+import io.relavr.sender.core.model.AudioStreamState
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.PublishState
@@ -16,7 +17,7 @@ data class StreamControlUiState(
     val configEditable: Boolean,
     val audioEnabled: Boolean,
     val audioToggleEnabled: Boolean,
-    val audioCapabilityLabel: String,
+    val audioStatusLabel: String,
     val resolutionLabel: String,
     val fpsLabel: String,
     val bitrateLabel: String,
@@ -48,13 +49,10 @@ internal fun buildStreamControlUiState(
         sessionId = config.sessionId,
         configEditable = configEditable,
         audioEnabled = config.audioEnabled,
-        audioToggleEnabled = false,
-        audioCapabilityLabel =
-            if (capabilities?.audioPlaybackCaptureSupported == false) {
-                "当前设备不支持 AudioPlaybackCapture"
-            } else {
-                "音频推流将在第二阶段接入"
-            },
+        audioToggleEnabled =
+            configEditable &&
+                capabilities?.audioPlaybackCaptureSupported != false,
+        audioStatusLabel = sessionSnapshot.toAudioStatusLabel(config),
         resolutionLabel = config.resolution.label,
         fpsLabel = "${config.fps} FPS",
         bitrateLabel = "${config.bitrateKbps} kbps",
@@ -89,3 +87,13 @@ private fun StreamingSessionSnapshot.toStatusDescription(config: StreamConfig): 
             "默认配置：${config.resolution.label} / ${config.fps} FPS / $resolvedCodec / ${config.trimmedSessionId}"
     }
 }
+
+private fun StreamingSessionSnapshot.toAudioStatusLabel(config: StreamConfig): String =
+    when {
+        capabilities?.audioPlaybackCaptureSupported == false -> "当前设备不支持 AudioPlaybackCapture"
+        !config.audioEnabled -> "音频已关闭"
+        audioState == AudioStreamState.Starting -> "音频准备中"
+        audioState == AudioStreamState.Publishing -> "音频推流中"
+        audioState == AudioStreamState.Degraded -> audioDetail ?: "音频已降级为静音/仅视频"
+        else -> "开始推流后会采集系统播放音频"
+    }

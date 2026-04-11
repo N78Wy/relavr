@@ -4,7 +4,7 @@ import java.net.URI
 
 data class StreamConfig(
     val videoEnabled: Boolean = true,
-    val audioEnabled: Boolean = false,
+    val audioEnabled: Boolean = true,
     val codecPreference: CodecPreference = CodecPreference.H264,
     val resolution: VideoResolution = VideoResolution(width = 1280, height = 720),
     val fps: Int = 30,

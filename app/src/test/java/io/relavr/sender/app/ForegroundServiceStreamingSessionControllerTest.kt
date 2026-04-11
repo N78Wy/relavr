@@ -24,10 +24,12 @@ class ForegroundServiceStreamingSessionControllerTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val engine = FakeStreamingSessionController()
             val commandDispatcher = FakeForegroundServiceCommandDispatcher()
+            val recordAudioPermissionGateway = FakeRecordAudioPermissionGateway()
             val controller =
                 ForegroundServiceStreamingSessionController(
                     sessionEngine = engine,
                     commandDispatcher = commandDispatcher,
+                    recordAudioPermissionGateway = recordAudioPermissionGateway,
                     dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
                     logger = FakeAppLogger(),
                 )
@@ -44,6 +46,7 @@ class ForegroundServiceStreamingSessionControllerTest {
             assertEquals(1, commandDispatcher.startCount)
             assertEquals(config, commandDispatcher.lastStartConfig)
             assertEquals(0, engine.startCount)
+            assertEquals(0, recordAudioPermissionGateway.requestCount)
             assertEquals(CaptureState.RequestingPermission, controller.observeState().value.captureState)
             assertEquals(PublishState.Preparing, controller.observeState().value.publishState)
             assertNull(controller.observeState().value.error)
@@ -70,6 +73,7 @@ class ForegroundServiceStreamingSessionControllerTest {
                 ForegroundServiceStreamingSessionController(
                     sessionEngine = engine,
                     commandDispatcher = commandDispatcher,
+                    recordAudioPermissionGateway = FakeRecordAudioPermissionGateway(),
                     dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
                     logger = FakeAppLogger(),
                 )
@@ -93,6 +97,7 @@ class ForegroundServiceStreamingSessionControllerTest {
                 ForegroundServiceStreamingSessionController(
                     sessionEngine = engine,
                     commandDispatcher = FakeForegroundServiceCommandDispatcher(),
+                    recordAudioPermissionGateway = FakeRecordAudioPermissionGateway(),
                     dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
                     logger = FakeAppLogger(),
                 )
@@ -127,6 +132,7 @@ class ForegroundServiceStreamingSessionControllerTest {
                 ForegroundServiceStreamingSessionController(
                     sessionEngine = FakeStreamingSessionController(),
                     commandDispatcher = commandDispatcher,
+                    recordAudioPermissionGateway = FakeRecordAudioPermissionGateway(),
                     dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
                     logger = logger,
                 )
@@ -141,6 +147,31 @@ class ForegroundServiceStreamingSessionControllerTest {
                 controller.observeState().value.error,
             )
             assertEquals(1, logger.errorLogs.size)
+        }
+
+    @Test
+    fun `音频开启时会先请求录音权限`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val recordAudioPermissionGateway = FakeRecordAudioPermissionGateway()
+            val controller =
+                ForegroundServiceStreamingSessionController(
+                    sessionEngine = FakeStreamingSessionController(),
+                    commandDispatcher = FakeForegroundServiceCommandDispatcher(),
+                    recordAudioPermissionGateway = recordAudioPermissionGateway,
+                    dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
+                    logger = FakeAppLogger(),
+                )
+
+            advanceUntilIdle()
+            controller.start(
+                StreamConfig(
+                    audioEnabled = true,
+                    signalingEndpoint = VALID_SIGNALING_ENDPOINT,
+                ),
+            )
+
+            assertEquals(1, recordAudioPermissionGateway.requestCount)
         }
 
     private companion object {

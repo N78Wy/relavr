@@ -182,7 +182,8 @@ function ensurePeerConnection() {
             remoteVideo.srcObject = new MediaStream([event.track]);
         }
         videoFrame.classList.add('is-live');
-        appendLog('已收到远端视频轨');
+        appendLog(`已收到远端${event.track.kind === 'audio' ? '音频' : '视频'}轨`);
+        void tryPlayRemoteMedia();
     });
 
     peerConnection.addEventListener('iceconnectionstatechange', () => {
@@ -269,6 +270,15 @@ function resetPeerConnection() {
     videoFrame.classList.remove('is-live');
     setIceState('未开始');
     setPeerState('未开始');
+}
+
+async function tryPlayRemoteMedia() {
+    try {
+        remoteVideo.muted = false;
+        await remoteVideo.play();
+    } catch (error) {
+        appendLog(`浏览器拦截了自动播放：${error instanceof Error ? error.message : '请手动点击播放'}`, 'warn');
+    }
 }
 
 function setSignalingState(value) {

@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.relavr.sender.core.model.AudioStreamState
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.StreamConfig
@@ -151,6 +152,34 @@ class StreamControlScreenTest {
 
         assertEquals("invalidws://relay.example/ws", lastEndpoint)
         assertEquals("room-77", lastSessionId)
+    }
+
+    @Test
+    fun `音频开关可操作且会展示降级提示`() {
+        var audioEnabled = true
+
+        composeRule.setContent {
+            streamControlScreen(
+                uiState =
+                    buildStreamControlUiState(
+                        config = StreamConfig(signalingEndpoint = VALID_SIGNALING_ENDPOINT),
+                        sessionSnapshot =
+                            StreamingSessionSnapshot(
+                                audioState = AudioStreamState.Degraded,
+                                audioDetail = "音频已降级为静音/仅视频",
+                            ),
+                    ),
+                onSignalingEndpointChanged = {},
+                onSessionIdChanged = {},
+                onAudioEnabledChanged = { audioEnabled = it },
+                onStartClicked = {},
+                onStopClicked = {},
+            )
+        }
+
+        composeRule.onNodeWithText("音频已降级为静音/仅视频").fetchSemanticsNode()
+        composeRule.onNodeWithTag(StreamControlTestTags.AUDIO_SWITCH).performClick()
+        assertEquals(false, audioEnabled)
     }
 
     private fun validConfig() = StreamConfig(signalingEndpoint = VALID_SIGNALING_ENDPOINT)

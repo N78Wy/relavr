@@ -15,6 +15,7 @@ test('HTTP 页面和 WebSocket 信令链路可以正常工作', async () => {
         const baseUrl = `http://127.0.0.1:${server.address.port}`;
         const html = await fetch(`${baseUrl}/`).then((response) => response.text());
         assert.match(html, /Quest 3 浏览器预览/);
+        assert.match(html, /当前页面会接收并播放远端音视频/);
 
         const senderSocket = await openSocket(`${baseUrl.replace('http', 'ws')}/ws`);
         const sender = createMessageHarness(senderSocket);

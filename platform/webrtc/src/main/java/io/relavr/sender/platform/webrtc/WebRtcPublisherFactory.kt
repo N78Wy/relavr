@@ -4,11 +4,13 @@ import android.content.Context
 import android.content.Intent
 import android.media.projection.MediaProjection
 import io.relavr.sender.core.common.AppLogger
+import io.relavr.sender.core.model.AudioStreamState
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.session.AudioCaptureSource
 import io.relavr.sender.core.session.ProjectionAccess
+import io.relavr.sender.core.session.PublishStartResult
 import io.relavr.sender.core.session.RtcPublishSession
 import io.relavr.sender.core.session.RtcPublisherFactory
 import io.relavr.sender.core.session.RtcSessionEvent
@@ -27,6 +29,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withTimeout
+import org.webrtc.AudioSource
+import org.webrtc.AudioTrack
 import org.webrtc.DefaultVideoDecoderFactory
 import org.webrtc.DefaultVideoEncoderFactory
 import org.webrtc.EglBase
@@ -39,22 +43,21 @@ import org.webrtc.SessionDescription
 import org.webrtc.SurfaceTextureHelper
 import org.webrtc.VideoSource
 import org.webrtc.VideoTrack
+import org.webrtc.audio.JavaAudioDeviceModule
+import java.io.Closeable
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
 class WebRtcPublisherFactory(
-    appContext: Context,
+    private val appContext: Context,
     private val logger: AppLogger,
 ) : RtcPublisherFactory {
-    private val runtime = WebRtcRuntime(appContext.applicationContext)
-
     override suspend fun createSession(
         config: StreamConfig,
         signalingSession: SignalingSession,
     ): RtcPublishSession =
         WebRtcPublishSession(
-            appContext = runtime.appContext,
-            runtime = runtime,
+            appContext = appContext.applicationContext,
             config = config,
             signalingSession = signalingSession,
             logger = logger,
@@ -63,13 +66,17 @@ class WebRtcPublisherFactory(
 
 private class WebRtcPublishSession(
     private val appContext: Context,
-    private val runtime: WebRtcRuntime,
     private val config: StreamConfig,
     private val signalingSession: SignalingSession,
     private val logger: AppLogger,
 ) : RtcPublishSession {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val eventFlow = MutableSharedFlow<RtcSessionEvent>(extraBufferCapacity = 32)
+    private val audioBridge =
+        PlaybackAudioBufferBridge { detail ->
+            eventFlow.tryEmit(RtcSessionEvent.AudioDegraded(detail))
+        }
+    private val runtime = WebRtcRuntime(appContext, audioBridge)
     private val terminalError = CompletableDeferred<SenderError>()
     private val remoteDescriptionReady = CompletableDeferred<Unit>()
     private val peerConnected = CompletableDeferred<Unit>()
@@ -81,6 +88,8 @@ private class WebRtcPublishSession(
     private var surfaceTextureHelper: SurfaceTextureHelper? = null
     private var videoSource: VideoSource? = null
     private var videoTrack: VideoTrack? = null
+    private var webrtcAudioSource: AudioSource? = null
+    private var webrtcAudioTrack: AudioTrack? = null
     private var signalingJob: Job? = null
 
     override val events: Flow<RtcSessionEvent> = eventFlow.asSharedFlow()
@@ -88,11 +97,7 @@ private class WebRtcPublishSession(
     override suspend fun publish(
         projectionAccess: ProjectionAccess,
         audioSource: AudioCaptureSource?,
-    ) {
-        if (audioSource != null) {
-            logger.error(TAG, "当前版本暂未接入 WebRTC 音轨，音频将被忽略", null)
-        }
-
+    ): PublishStartResult {
         val permission =
             projectionAccess.mediaProjectionPermission()
                 ?: throw SenderException(SenderError.SessionStartFailed("缺少有效的 MediaProjection 授权结果"))
@@ -154,6 +159,8 @@ private class WebRtcPublishSession(
             )
         videoTrack = localVideoTrack
         peer.addTrack(localVideoTrack, listOf(sessionId))
+
+        val audioPublishResult = attachAudioTrack(peer, sessionId, capturer, audioSource)
         peer.setBitrate(null, config.bitrateKbps * 1000, config.bitrateKbps * 1000)
 
         eventFlow.tryEmit(RtcSessionEvent.Status("正在创建 WebRTC Offer"))
@@ -190,6 +197,53 @@ private class WebRtcPublishSession(
             timeoutMs = CONNECT_TIMEOUT_MS,
             timeoutError = SenderError.PeerConnectionFailed("等待 WebRTC 连接建立超时"),
         )
+        return audioPublishResult
+    }
+
+    private fun attachAudioTrack(
+        peer: PeerConnection,
+        sessionId: String,
+        capturer: ScreenCapturerAndroid,
+        audioSource: AudioCaptureSource?,
+    ): PublishStartResult {
+        if (audioSource == null) {
+            audioBridge.attachSource(null)
+            return PublishStartResult(audioState = AudioStreamState.Disabled)
+        }
+
+        return runCatching {
+            val mediaProjection =
+                capturer.mediaProjection
+                    ?: throw SenderException(SenderError.SessionStartFailed("屏幕采集尚未就绪，无法启动音频采集"))
+            audioSource.start(mediaProjection)
+            audioBridge.attachSource(audioSource)
+
+            val localAudioSource =
+                runtime.peerConnectionFactory.createAudioSource(MediaConstraints())
+            webrtcAudioSource = localAudioSource
+            val localAudioTrack =
+                runtime.peerConnectionFactory.createAudioTrack(
+                    AUDIO_TRACK_ID,
+                    localAudioSource,
+                )
+            webrtcAudioTrack = localAudioTrack
+            peer.addTrack(localAudioTrack, listOf(sessionId))
+            PublishStartResult(audioState = AudioStreamState.Publishing)
+        }.getOrElse { throwable ->
+            audioBridge.attachSource(null)
+            runCatching {
+                audioSource.close()
+            }
+            logger.error(
+                TAG,
+                "初始化 WebRTC 音轨失败，已降级为仅视频推流: ${throwable.message}",
+                throwable,
+            )
+            PublishStartResult(
+                audioState = AudioStreamState.Degraded,
+                audioDetail = throwable.message ?: "音频已降级为静音/仅视频",
+            )
+        }
     }
 
     private fun createPeerConnection(sessionId: String): PeerConnection? {
@@ -363,6 +417,7 @@ private class WebRtcPublishSession(
             return
         }
 
+        audioBridge.attachSource(null)
         signalingJob?.cancel()
         runBlocking {
             runCatching {
@@ -374,6 +429,12 @@ private class WebRtcPublishSession(
         }
         runCatching {
             screenCapturer?.dispose()
+        }
+        runCatching {
+            webrtcAudioTrack?.dispose()
+        }
+        runCatching {
+            webrtcAudioSource?.dispose()
         }
         runCatching {
             videoTrack?.dispose()
@@ -389,6 +450,9 @@ private class WebRtcPublishSession(
         }
         runCatching {
             peerConnection?.dispose()
+        }
+        runCatching {
+            runtime.close()
         }
         runCatching {
             signalingSession.close()
@@ -421,6 +485,7 @@ private class WebRtcPublishSession(
     private companion object {
         const val TAG = "WebRtcPublisher"
         const val VIDEO_TRACK_ID = "relavr-video-track"
+        const val AUDIO_TRACK_ID = "relavr-audio-track"
         const val ANSWER_TIMEOUT_MS = 15_000L
         const val CONNECT_TIMEOUT_MS = 10_000L
     }
@@ -428,15 +493,28 @@ private class WebRtcPublishSession(
 
 private class WebRtcRuntime(
     val appContext: Context,
-) {
-    val eglBase: EglBase by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        EglBase.create()
-    }
+    audioBridge: PlaybackAudioBufferBridge,
+) : Closeable {
+    val eglBase: EglBase = EglBase.create()
+    private val audioDeviceModule: JavaAudioDeviceModule =
+        JavaAudioDeviceModule
+            .builder(appContext)
+            .setInputSampleRate(AUDIO_SAMPLE_RATE_HZ)
+            .setUseStereoInput(true)
+            .setUseHardwareAcousticEchoCanceler(false)
+            .setUseHardwareNoiseSuppressor(false)
+            .setEnableVolumeLogger(false)
+            .setAudioBufferCallback(audioBridge)
+            .createAudioDeviceModule()
+            .also { module ->
+                module.setAudioRecordEnabled(false)
+            }
 
     val peerConnectionFactory: PeerConnectionFactory by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         initializePeerConnectionFactory(appContext)
         PeerConnectionFactory
             .builder()
+            .setAudioDeviceModule(audioDeviceModule)
             .setVideoEncoderFactory(
                 DefaultVideoEncoderFactory(
                     eglBase.eglBaseContext,
@@ -446,6 +524,18 @@ private class WebRtcRuntime(
             ).setVideoDecoderFactory(
                 DefaultVideoDecoderFactory(eglBase.eglBaseContext),
             ).createPeerConnectionFactory()
+    }
+
+    override fun close() {
+        runCatching {
+            peerConnectionFactory.dispose()
+        }
+        runCatching {
+            audioDeviceModule.release()
+        }
+        runCatching {
+            eglBase.release()
+        }
     }
 
     private fun initializePeerConnectionFactory(context: Context) {
@@ -459,6 +549,7 @@ private class WebRtcRuntime(
     }
 
     private companion object {
+        const val AUDIO_SAMPLE_RATE_HZ = 48_000
         val initialized = AtomicBoolean(false)
     }
 }

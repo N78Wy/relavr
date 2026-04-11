@@ -32,6 +32,10 @@ class MainActivity : ComponentActivity() {
                 data = result.data,
             )
         }
+    private val recordAudioPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            appContainer.recordAudioPermissionGateway.onPermissionResult(granted)
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,6 +45,13 @@ class MainActivity : ComponentActivity() {
             repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
                 appContainer.projectionPermissionGateway.permissionRequests.collect { intent ->
                     projectionPermissionLauncher.launch(intent)
+                }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+                appContainer.recordAudioPermissionGateway.permissionRequests.collect { permission ->
+                    recordAudioPermissionLauncher.launch(permission)
                 }
             }
         }

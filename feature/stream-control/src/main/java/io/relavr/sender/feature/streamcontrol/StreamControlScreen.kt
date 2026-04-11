@@ -204,7 +204,7 @@ private fun configCard(
                     fontWeight = FontWeight.Medium,
                 )
                 Text(
-                    text = uiState.audioCapabilityLabel,
+                    text = uiState.audioStatusLabel,
                     style = MaterialTheme.typography.bodySmall,
                     color = Color(0xFFD6E2F0),
                 )

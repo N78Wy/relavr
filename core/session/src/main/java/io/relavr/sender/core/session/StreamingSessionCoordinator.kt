@@ -2,6 +2,7 @@ package io.relavr.sender.core.session
 
 import io.relavr.sender.core.common.AppDispatchers
 import io.relavr.sender.core.common.AppLogger
+import io.relavr.sender.core.model.AudioStreamState
 import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.PublishState
@@ -68,6 +69,13 @@ class StreamingSessionCoordinator(
                 it.copy(
                     captureState = CaptureState.RequestingPermission,
                     publishState = PublishState.Preparing,
+                    audioState =
+                        if (config.audioEnabled) {
+                            AudioStreamState.Starting
+                        } else {
+                            AudioStreamState.Disabled
+                        },
+                    audioDetail = null,
                     statusDetail = "正在等待 MediaProjection 系统授权",
                     error = null,
                 )
@@ -106,15 +114,44 @@ class StreamingSessionCoordinator(
                     }
                 val selection = codecPolicy.select(config.codecPreference, capabilities)
                 val resolvedConfig = config.copy(codecPreference = selection.resolved)
+                var audioState =
+                    if (resolvedConfig.audioEnabled) {
+                        AudioStreamState.Starting
+                    } else {
+                        AudioStreamState.Disabled
+                    }
+                var audioDetail: String? = null
 
                 val audioSource =
                     if (resolvedConfig.audioEnabled) {
-                        withContext(dispatchers.io) {
-                            audioCaptureSourceFactory.create(projectionAccess, resolvedConfig)
-                        }?.also { resources += it }
+                        runCatching {
+                            withContext(dispatchers.io) {
+                                audioCaptureSourceFactory.create(projectionAccess, resolvedConfig)
+                            }
+                        }.onFailure { throwable ->
+                            val mappedError = mapError(throwable)
+                            if (mappedError !is SenderError.AudioCaptureUnavailable) {
+                                throw throwable
+                            }
+                            audioState = AudioStreamState.Degraded
+                            audioDetail = mappedError.message
+                            logger.error(
+                                TAG,
+                                "音频采集初始化失败，已降级为仅视频推流: ${mappedError.message}",
+                                throwable,
+                            )
+                        }.getOrNull()
+                            ?.also { resources += it }
                     } else {
                         null
                     }
+
+                state.update {
+                    it.copy(
+                        audioState = audioState,
+                        audioDetail = audioDetail,
+                    )
+                }
 
                 state.update {
                     it.copy(statusDetail = "正在连接信令服务器")
@@ -136,9 +173,17 @@ class StreamingSessionCoordinator(
                 state.update {
                     it.copy(statusDetail = "正在准备 WebRTC 视频轨道")
                 }
-                withContext(dispatchers.io) {
-                    publishSession.publish(projectionAccess, audioSource)
-                }
+                val publishResult =
+                    withContext(dispatchers.io) {
+                        publishSession.publish(projectionAccess, audioSource)
+                    }
+                val finalAudioState =
+                    if (audioState == AudioStreamState.Degraded) {
+                        AudioStreamState.Degraded
+                    } else {
+                        publishResult.audioState
+                    }
+                val finalAudioDetail = audioDetail ?: publishResult.audioDetail
 
                 activeSession =
                     ActiveSession(
@@ -154,10 +199,17 @@ class StreamingSessionCoordinator(
                     it.copy(
                         captureState = CaptureState.Capturing,
                         publishState = PublishState.Publishing,
+                        audioState = finalAudioState,
+                        audioDetail = finalAudioDetail,
                         resolvedConfig = resolvedConfig,
                         capabilities = capabilities,
                         codecSelection = selection,
-                        statusDetail = "WebRTC 已连接，正在发送视频",
+                        statusDetail =
+                            if (finalAudioState == AudioStreamState.Publishing) {
+                                "WebRTC 已连接，正在发送音视频"
+                            } else {
+                                "WebRTC 已连接，正在发送视频"
+                            },
                         error = null,
                     )
                 }
@@ -183,6 +235,8 @@ class StreamingSessionCoordinator(
                         it.copy(
                             captureState = CaptureState.Idle,
                             publishState = PublishState.Idle,
+                            audioState = AudioStreamState.Disabled,
+                            audioDetail = null,
                             resolvedConfig = null,
                             codecSelection = null,
                             statusDetail = null,
@@ -216,6 +270,8 @@ class StreamingSessionCoordinator(
                     it.copy(
                         captureState = CaptureState.Idle,
                         publishState = PublishState.Idle,
+                        audioState = AudioStreamState.Disabled,
+                        audioDetail = null,
                         resolvedConfig = null,
                         codecSelection = null,
                         statusDetail = null,
@@ -260,6 +316,26 @@ class StreamingSessionCoordinator(
                             sessionToken = sessionToken,
                             error = SenderError.CaptureInterrupted(event.reason),
                         )
+
+                    is RtcSessionEvent.AudioDegraded -> {
+                        if (activeSessionToken === sessionToken) {
+                            state.update { current ->
+                                current.copy(
+                                    audioState = AudioStreamState.Degraded,
+                                    audioDetail = event.detail,
+                                    statusDetail =
+                                        if (
+                                            current.captureState == CaptureState.Capturing &&
+                                            current.publishState == PublishState.Publishing
+                                        ) {
+                                            "WebRTC 已连接，正在发送视频"
+                                        } else {
+                                            current.statusDetail
+                                        },
+                                )
+                            }
+                        }
+                    }
 
                     RtcSessionEvent.Disconnected ->
                         terminateFromRtcEvent(

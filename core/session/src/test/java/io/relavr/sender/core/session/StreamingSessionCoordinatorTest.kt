@@ -1,5 +1,6 @@
 package io.relavr.sender.core.session
 
+import io.relavr.sender.core.model.AudioStreamState
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.PublishState
@@ -61,6 +62,7 @@ class StreamingSessionCoordinatorTest {
             val state = coordinator.observeState().value
             assertEquals(CaptureState.Capturing, state.captureState)
             assertEquals(PublishState.Publishing, state.publishState)
+            assertEquals(AudioStreamState.Disabled, state.audioState)
             assertEquals(1, rtcPublisherFactory.session.publishCount)
             assertEquals(1, signalingClient.openCount)
             assertEquals("WebRTC 已连接，正在发送视频", state.statusDetail)
@@ -168,10 +170,47 @@ class StreamingSessionCoordinatorTest {
             val state = coordinator.observeState().value
             assertEquals(CaptureState.Idle, state.captureState)
             assertEquals(PublishState.Idle, state.publishState)
+            assertEquals(AudioStreamState.Disabled, state.audioState)
             assertTrue(projectionAccess.closed)
             assertTrue(audioSource.closed)
             assertTrue(rtcPublisherFactory.session.closed)
             assertEquals(1, signalingClient.session.closeCount)
+        }
+
+    @Test
+    fun `音频采集初始化失败时会降级为仅视频推流`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val audioCaptureSourceFactory =
+                FakeAudioCaptureSourceFactory().also {
+                    it.shouldFail = true
+                }
+            val coordinator =
+                StreamingSessionCoordinator(
+                    projectionPermissionGateway = FakeProjectionPermissionGateway(),
+                    audioCaptureSourceFactory = audioCaptureSourceFactory,
+                    codecCapabilityRepository = FakeCodecCapabilityRepository(),
+                    codecPolicy = FakeCodecPolicy(),
+                    rtcPublisherFactory = FakeRtcPublisherFactory(),
+                    signalingClient = FakeSignalingClient(),
+                    dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
+                    logger = FakeAppLogger(),
+                )
+
+            coordinator.start(
+                StreamConfig(
+                    audioEnabled = true,
+                    signalingEndpoint = VALID_SIGNALING_ENDPOINT,
+                ),
+            )
+            advanceUntilIdle()
+
+            val state = coordinator.observeState().value
+            assertEquals(CaptureState.Capturing, state.captureState)
+            assertEquals(PublishState.Publishing, state.publishState)
+            assertEquals(AudioStreamState.Degraded, state.audioState)
+            assertEquals("fake-audio-failure", state.audioDetail)
+            assertEquals("WebRTC 已连接，正在发送视频", state.statusDetail)
         }
 
     @Test
@@ -202,6 +241,43 @@ class StreamingSessionCoordinatorTest {
             assertEquals(PublishState.Error, state.publishState)
             assertEquals(SenderError.PeerConnectionFailed("WebRTC 连接已断开"), state.error)
             assertTrue(projectionAccess.closed)
+        }
+
+    @Test
+    fun `运行中音频降级事件不会终止视频推流`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val rtcPublisherFactory = FakeRtcPublisherFactory()
+            val coordinator =
+                StreamingSessionCoordinator(
+                    projectionPermissionGateway = FakeProjectionPermissionGateway(),
+                    audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(FakeAudioCaptureSource()),
+                    codecCapabilityRepository = FakeCodecCapabilityRepository(),
+                    codecPolicy = FakeCodecPolicy(),
+                    rtcPublisherFactory = rtcPublisherFactory,
+                    signalingClient = FakeSignalingClient(),
+                    dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
+                    logger = FakeAppLogger(),
+                )
+
+            coordinator.start(
+                StreamConfig(
+                    audioEnabled = true,
+                    signalingEndpoint = VALID_SIGNALING_ENDPOINT,
+                ),
+            )
+            advanceUntilIdle()
+
+            rtcPublisherFactory.session.emitEvent(RtcSessionEvent.AudioDegraded("音频已回退为静音"))
+            advanceUntilIdle()
+
+            val state = coordinator.observeState().value
+            assertEquals(CaptureState.Capturing, state.captureState)
+            assertEquals(PublishState.Publishing, state.publishState)
+            assertEquals(AudioStreamState.Degraded, state.audioState)
+            assertEquals("音频已回退为静音", state.audioDetail)
+            assertEquals("WebRTC 已连接，正在发送视频", state.statusDetail)
+            assertNull(state.error)
         }
 
     @Test

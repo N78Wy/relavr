@@ -1,5 +1,6 @@
 package io.relavr.sender.app
 
+import io.relavr.sender.core.model.AudioStreamState
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.PublishState
@@ -48,6 +49,7 @@ class ForegroundServiceStreamingSessionIntegrationTest {
                 ForegroundServiceStreamingSessionController(
                     sessionEngine = coordinator,
                     commandDispatcher = commandDispatcher,
+                    recordAudioPermissionGateway = FakeRecordAudioPermissionGateway(),
                     dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
                     logger = FakeAppLogger(),
                 )
@@ -71,7 +73,8 @@ class ForegroundServiceStreamingSessionIntegrationTest {
             assertTrue(controller.observeState().value.isStreaming)
             assertEquals(CaptureState.Capturing, controller.observeState().value.captureState)
             assertEquals(PublishState.Publishing, controller.observeState().value.publishState)
-            assertEquals("WebRTC 已连接，正在发送视频", controller.observeState().value.statusDetail)
+            assertEquals(AudioStreamState.Publishing, controller.observeState().value.audioState)
+            assertEquals("WebRTC 已连接，正在发送音视频", controller.observeState().value.statusDetail)
             assertEquals(1, rtcPublisherFactory.session.publishCount)
             assertEquals(1, signalingClient.openCount)
         }

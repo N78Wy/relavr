@@ -21,11 +21,12 @@ class AppContainer(
         application.getSystemService(MediaProjectionManager::class.java)
 
     val projectionPermissionGateway = AndroidProjectionPermissionGateway(mediaProjectionManager)
+    internal val recordAudioPermissionGateway = AndroidRecordAudioPermissionGateway(application)
 
     internal val sessionEngine: StreamingSessionController =
         StreamingSessionCoordinator(
             projectionPermissionGateway = projectionPermissionGateway,
-            audioCaptureSourceFactory = PlaybackAudioCaptureSourceFactory(),
+            audioCaptureSourceFactory = PlaybackAudioCaptureSourceFactory(application),
             codecCapabilityRepository = AndroidMediaCodecCapabilityRepository(DefaultAppDispatchers),
             codecPolicy = DefaultCodecPolicy(),
             rtcPublisherFactory = WebRtcPublisherFactory(application, AndroidAppLogger),
@@ -41,6 +42,7 @@ class AppContainer(
         ForegroundServiceStreamingSessionController(
             sessionEngine = sessionEngine,
             commandDispatcher = foregroundServiceCommandDispatcher,
+            recordAudioPermissionGateway = recordAudioPermissionGateway,
             dispatchers = DefaultAppDispatchers,
             logger = AndroidAppLogger,
         )

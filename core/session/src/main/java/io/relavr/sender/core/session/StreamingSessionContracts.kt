@@ -1,6 +1,8 @@
 package io.relavr.sender.core.session
 
 import android.content.Intent
+import android.media.projection.MediaProjection
+import io.relavr.sender.core.model.AudioStreamState
 import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.CodecSelection
@@ -8,6 +10,7 @@ import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
 import kotlinx.coroutines.flow.Flow
 import java.io.Closeable
+import java.nio.ByteBuffer
 
 data class MediaProjectionPermission(
     val resultCode: Int,
@@ -25,7 +28,15 @@ interface ProjectionPermissionGateway {
 }
 
 interface AudioCaptureSource : Closeable {
-    val enabled: Boolean
+    val sampleRateHz: Int
+    val channelCount: Int
+
+    fun start(mediaProjection: MediaProjection)
+
+    fun read(
+        targetBuffer: ByteBuffer,
+        requestedBytes: Int,
+    ): AudioFrameReadResult
 }
 
 fun interface AudioCaptureSourceFactory {
@@ -34,6 +45,11 @@ fun interface AudioCaptureSourceFactory {
         config: StreamConfig,
     ): AudioCaptureSource?
 }
+
+data class AudioFrameReadResult(
+    val bytesRead: Int,
+    val timestampNs: Long,
+)
 
 interface CodecCapabilityRepository {
     suspend fun getCapabilities(): CapabilitySnapshot
@@ -104,8 +120,17 @@ sealed interface RtcSessionEvent {
         val reason: String,
     ) : RtcSessionEvent
 
+    data class AudioDegraded(
+        val detail: String,
+    ) : RtcSessionEvent
+
     data object Disconnected : RtcSessionEvent
 }
+
+data class PublishStartResult(
+    val audioState: AudioStreamState,
+    val audioDetail: String? = null,
+)
 
 interface RtcPublishSession : Closeable {
     val events: Flow<RtcSessionEvent>
@@ -113,7 +138,7 @@ interface RtcPublishSession : Closeable {
     suspend fun publish(
         projectionAccess: ProjectionAccess,
         audioSource: AudioCaptureSource?,
-    )
+    ): PublishStartResult
 }
 
 fun interface RtcPublisherFactory {
