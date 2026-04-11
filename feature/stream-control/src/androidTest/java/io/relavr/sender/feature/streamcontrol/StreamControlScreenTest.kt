@@ -23,7 +23,6 @@ import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.CodecSelection
-import io.relavr.sender.core.model.DiscoveredReceiver
 import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
@@ -106,9 +105,7 @@ class StreamControlScreenTest {
             .assertIsDisplayed()
         composeRule.onNodeWithText("例如 ws://192.168.1.20:8080/ws").assertIsDisplayed()
         composeRule.onNodeWithTag(StreamControlTestTags.SCAN_BUTTON).assertIsDisplayed()
-        composeRule
-            .onNodeWithText("扫描 receiver 控制台二维码后会自动回填地址并立即开播")
-            .assertIsDisplayed()
+        composeRule.onNodeWithText("扫描 receiver 控制台二维码后会自动回填地址并立即开播").assertIsDisplayed()
     }
 
     @Test
@@ -126,69 +123,6 @@ class StreamControlScreenTest {
 
         composeRule.onNodeWithTag(StreamControlTestTags.SCAN_BUTTON).performClick()
         assertEquals(1, openScannerCount)
-    }
-
-    @Test
-    fun `发现列表会展示接收端并触发回调`() {
-        var clickedReceiver: DiscoveredReceiver? = null
-
-        setStreamControlContent(
-            uiState =
-                buildStreamControlUiState(
-                    config = validConfig(),
-                    discoveryState =
-                        io.relavr.sender.core.model.ReceiverDiscoverySnapshot(
-                            receivers =
-                                listOf(
-                                    DiscoveredReceiver(
-                                        serviceName = "living-room",
-                                        receiverName = "Living Room",
-                                        sessionId = "room-1",
-                                        host = "192.168.1.20",
-                                        port = 17888,
-                                        authRequired = true,
-                                    ),
-                                ),
-                        ),
-                    sessionSnapshot = StreamingSessionSnapshot(),
-                ),
-            onDiscoveredReceiverClicked = { clickedReceiver = it },
-        )
-
-        composeRule.onNodeWithText("局域网接收端").assertIsDisplayed()
-        composeRule.onNodeWithTag(StreamControlTestTags.discoveryReceiver("living-room")).performClick()
-        assertEquals("Living Room", clickedReceiver?.receiverName)
-    }
-
-    @Test
-    fun `发现确认弹窗按钮会触发回调`() {
-        var confirmCount = 0
-        var dismissCount = 0
-
-        setStreamControlContent(
-            uiState =
-                buildStreamControlUiState(
-                    config = validConfig(),
-                    pendingReceiver =
-                        DiscoveredReceiver(
-                            serviceName = "living-room",
-                            receiverName = "Living Room",
-                            sessionId = "room-1",
-                            host = "192.168.1.20",
-                            port = 17888,
-                            authRequired = false,
-                        ),
-                    sessionSnapshot = StreamingSessionSnapshot(),
-                ),
-            onDiscoveryConnectionDismissed = { dismissCount += 1 },
-            onDiscoveryConnectionConfirmed = { confirmCount += 1 },
-        )
-
-        composeRule.onNodeWithText("连接到 Living Room").assertIsDisplayed()
-        composeRule.onNodeWithTag(StreamControlTestTags.DISCOVERY_CONFIRM_BUTTON).performClick()
-        composeRule.onNodeWithTag(StreamControlTestTags.DISCOVERY_CANCEL_BUTTON).performClick()
-        assertEquals(1, confirmCount)
-        assertEquals(1, dismissCount)
     }
 
     @Test
@@ -241,12 +175,8 @@ class StreamControlScreenTest {
         )
 
         composeRule.onNodeWithTag(StreamControlTestTags.START_BUTTON).assertIsNotEnabled()
-        composeRule
-            .onNodeWithTag(StreamControlTestTags.SIGNALING_ENDPOINT_INPUT)
-            .performTextInput("ws://relay.example/ws")
-        composeRule
-            .onNodeWithTag(StreamControlTestTags.SESSION_ID_INPUT)
-            .performTextInput("room-77")
+        composeRule.onNodeWithTag(StreamControlTestTags.SIGNALING_ENDPOINT_INPUT).performTextInput("ws://relay.example/ws")
+        composeRule.onNodeWithTag(StreamControlTestTags.SESSION_ID_INPUT).performTextInput("room-77")
 
         assertEquals("invalidws://relay.example/ws", lastEndpoint)
         assertEquals("room-77", lastSessionId)
@@ -326,9 +256,7 @@ class StreamControlScreenTest {
                 ),
         )
 
-        composeRule
-            .onNodeWithText("本次请求 H.265 / HEVC，实际使用 H.264 / AVC")
-            .assertIsDisplayed()
+        composeRule.onNodeWithText("本次请求 H.265 / HEVC，实际使用 H.264 / AVC").assertIsDisplayed()
     }
 
     @Test
@@ -348,10 +276,7 @@ class StreamControlScreenTest {
             onBitrateChanged = { selectedBitrate = it },
         )
 
-        composeRule
-            .onNodeWithTag(
-                StreamControlTestTags.resolutionOption(VideoResolution(width = 1920, height = 1080)),
-            ).performClick()
+        composeRule.onNodeWithTag(StreamControlTestTags.resolutionOption(VideoResolution(width = 1920, height = 1080))).performClick()
         composeRule.onNodeWithTag(StreamControlTestTags.fpsOption(60)).performClick()
         composeRule.onNodeWithTag(StreamControlTestTags.bitrateOption(8000)).performClick()
 
@@ -377,9 +302,7 @@ class StreamControlScreenTest {
         composeRule.onNodeWithTag(StreamControlTestTags.STREAM_PROFILE_CARD).assertIsDisplayed()
         composeRule.onNodeWithTag(StreamControlTestTags.START_BUTTON).assertIsDisplayed()
         composeRule.onNodeWithTag(StreamControlTestTags.STOP_BUTTON).assertIsDisplayed()
-        composeRule
-            .onNodeWithTag(StreamControlTestTags.resolutionOption(StreamConfig.DEFAULT_RESOLUTION))
-            .assertIsDisplayed()
+        composeRule.onNodeWithTag(StreamControlTestTags.resolutionOption(StreamConfig.DEFAULT_RESOLUTION)).assertIsDisplayed()
     }
 
     private fun setStreamControlContent(
@@ -390,10 +313,6 @@ class StreamControlScreenTest {
         onCodecPreferenceChanged: (CodecPreference) -> Unit = {},
         onAudioEnabledChanged: (Boolean) -> Unit = {},
         onOpenScannerClicked: () -> Unit = {},
-        onDiscoveryRefreshClicked: () -> Unit = {},
-        onDiscoveredReceiverClicked: (DiscoveredReceiver) -> Unit = {},
-        onDiscoveryConnectionDismissed: () -> Unit = {},
-        onDiscoveryConnectionConfirmed: () -> Unit = {},
         onResolutionChanged: (VideoResolution) -> Unit = {},
         onFpsChanged: (Int) -> Unit = {},
         onBitrateChanged: (Int) -> Unit = {},
@@ -409,10 +328,6 @@ class StreamControlScreenTest {
                     onCodecPreferenceChanged = onCodecPreferenceChanged,
                     onAudioEnabledChanged = onAudioEnabledChanged,
                     onOpenScannerClicked = onOpenScannerClicked,
-                    onDiscoveryRefreshClicked = onDiscoveryRefreshClicked,
-                    onDiscoveredReceiverClicked = onDiscoveredReceiverClicked,
-                    onDiscoveryConnectionDismissed = onDiscoveryConnectionDismissed,
-                    onDiscoveryConnectionConfirmed = onDiscoveryConnectionConfirmed,
                     onResolutionChanged = onResolutionChanged,
                     onFpsChanged = onFpsChanged,
                     onBitrateChanged = onBitrateChanged,

@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -20,7 +19,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -50,13 +48,10 @@ object StreamControlTestTags {
     const val START_BUTTON = "stream-start"
     const val STOP_BUTTON = "stream-stop"
     const val SCAN_BUTTON = "stream-scan"
-    const val DISCOVERY_REFRESH_BUTTON = "stream-discovery-refresh"
     const val AUDIO_SWITCH = "stream-audio-switch"
     const val SIGNALING_ENDPOINT_INPUT = "stream-signaling-endpoint"
     const val SESSION_ID_INPUT = "stream-session-id"
     const val STREAM_PROFILE_CARD = "stream-profile-card"
-    const val DISCOVERY_CONFIRM_BUTTON = "stream-discovery-confirm"
-    const val DISCOVERY_CANCEL_BUTTON = "stream-discovery-cancel"
 
     fun codecOption(preference: CodecPreference): String = "stream-codec-option-${preference.name.lowercase()}"
 
@@ -65,8 +60,6 @@ object StreamControlTestTags {
     fun fpsOption(fps: Int): String = "stream-fps-option-$fps"
 
     fun bitrateOption(bitrateKbps: Int): String = "stream-bitrate-option-$bitrateKbps"
-
-    fun discoveryReceiver(serviceName: String): String = "stream-discovery-$serviceName"
 }
 
 private enum class StreamControlLayoutMode {
@@ -83,10 +76,6 @@ fun streamControlScreen(
     onCodecPreferenceChanged: (CodecPreference) -> Unit,
     onAudioEnabledChanged: (Boolean) -> Unit,
     onOpenScannerClicked: () -> Unit,
-    onDiscoveryRefreshClicked: () -> Unit,
-    onDiscoveredReceiverClicked: (io.relavr.sender.core.model.DiscoveredReceiver) -> Unit,
-    onDiscoveryConnectionDismissed: () -> Unit,
-    onDiscoveryConnectionConfirmed: () -> Unit,
     onResolutionChanged: (VideoResolution) -> Unit,
     onFpsChanged: (Int) -> Unit,
     onBitrateChanged: (Int) -> Unit,
@@ -160,8 +149,6 @@ fun streamControlScreen(
                                 onCodecPreferenceChanged = onCodecPreferenceChanged,
                                 onAudioEnabledChanged = onAudioEnabledChanged,
                                 onOpenScannerClicked = onOpenScannerClicked,
-                                onDiscoveryRefreshClicked = onDiscoveryRefreshClicked,
-                                onDiscoveredReceiverClicked = onDiscoveredReceiverClicked,
                             )
                         }
                         Column(
@@ -194,8 +181,6 @@ fun streamControlScreen(
                         onCodecPreferenceChanged = onCodecPreferenceChanged,
                         onAudioEnabledChanged = onAudioEnabledChanged,
                         onOpenScannerClicked = onOpenScannerClicked,
-                        onDiscoveryRefreshClicked = onDiscoveryRefreshClicked,
-                        onDiscoveredReceiverClicked = onDiscoveredReceiverClicked,
                     )
                     streamProfileCard(
                         uiState = uiState,
@@ -213,14 +198,6 @@ fun streamControlScreen(
                         errorCard(message = errorMessage)
                     }
                 }
-            }
-
-            uiState.discoveryConfirmation?.let { confirmation ->
-                discoveryConfirmationDialog(
-                    confirmation = confirmation,
-                    onDismiss = onDiscoveryConnectionDismissed,
-                    onConfirm = onDiscoveryConnectionConfirmed,
-                )
             }
         }
     }
@@ -263,8 +240,6 @@ private fun configCard(
     onCodecPreferenceChanged: (CodecPreference) -> Unit,
     onAudioEnabledChanged: (Boolean) -> Unit,
     onOpenScannerClicked: () -> Unit,
-    onDiscoveryRefreshClicked: () -> Unit,
-    onDiscoveredReceiverClicked: (io.relavr.sender.core.model.DiscoveredReceiver) -> Unit,
 ) {
     surfaceCard {
         Text(
@@ -293,12 +268,6 @@ private fun configCard(
             text = uiState.codecStatusLabel,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        discoverySection(
-            uiState = uiState,
-            onRefreshClicked = onDiscoveryRefreshClicked,
-            onReceiverClicked = onDiscoveredReceiverClicked,
         )
         Spacer(modifier = Modifier.height(16.dp))
         OutlinedTextField(
@@ -392,80 +361,6 @@ private fun configCard(
 }
 
 @Composable
-private fun discoverySection(
-    uiState: StreamControlUiState,
-    onRefreshClicked: () -> Unit,
-    onReceiverClicked: (io.relavr.sender.core.model.DiscoveredReceiver) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "局域网接收端",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        OutlinedButton(
-            onClick = onRefreshClicked,
-            enabled = uiState.discoveryRefreshEnabled,
-            modifier = Modifier.testTag(StreamControlTestTags.DISCOVERY_REFRESH_BUTTON),
-        ) {
-            Text("刷新")
-        }
-    }
-    Spacer(modifier = Modifier.height(8.dp))
-    Text(
-        text = uiState.discoveryStatusLabel,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    uiState.discoveryReceivers.forEach { receiver ->
-        Spacer(modifier = Modifier.height(10.dp))
-        OutlinedButton(
-            onClick = { onReceiverClicked(receiver.receiver) },
-            enabled = receiver.enabled,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .testTag(StreamControlTestTags.discoveryReceiver(receiver.receiver.serviceName)),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.Start,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(
-                    text = receiver.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = receiver.detail,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Text(
-                    text = receiver.statusLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-    uiState.discoveryEmptyLabel?.let { emptyLabel ->
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(
-            text = emptyLabel,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
 private fun audioSummary(audioStatusLabel: String) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
@@ -504,7 +399,6 @@ private fun codecOptionButton(
                     disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                     disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
         ) {
             Column(horizontalAlignment = Alignment.Start, modifier = Modifier.fillMaxWidth()) {
                 Text(
@@ -523,7 +417,6 @@ private fun codecOptionButton(
             onClick = { onSelected(option.preference) },
             enabled = option.enabled,
             modifier = modifier,
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
             colors =
                 ButtonDefaults.outlinedButtonColors(
                     contentColor = MaterialTheme.colorScheme.onSurface,
@@ -769,44 +662,6 @@ private fun errorCard(message: String) {
 }
 
 @Composable
-private fun discoveryConfirmationDialog(
-    confirmation: ReceiverDiscoveryConfirmationUiState,
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(confirmation.title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(confirmation.detail)
-                Text(
-                    text = confirmation.statusLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = onConfirm,
-                modifier = Modifier.testTag(StreamControlTestTags.DISCOVERY_CONFIRM_BUTTON),
-            ) {
-                Text("连接")
-            }
-        },
-        dismissButton = {
-            OutlinedButton(
-                onClick = onDismiss,
-                modifier = Modifier.testTag(StreamControlTestTags.DISCOVERY_CANCEL_BUTTON),
-            ) {
-                Text("取消")
-            }
-        },
-    )
-}
-
-@Composable
 private fun surfaceCard(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
@@ -868,10 +723,6 @@ private fun streamControlScreenPreview() {
         onCodecPreferenceChanged = {},
         onAudioEnabledChanged = {},
         onOpenScannerClicked = {},
-        onDiscoveryRefreshClicked = {},
-        onDiscoveredReceiverClicked = {},
-        onDiscoveryConnectionDismissed = {},
-        onDiscoveryConnectionConfirmed = {},
         onResolutionChanged = {},
         onFpsChanged = {},
         onBitrateChanged = {},

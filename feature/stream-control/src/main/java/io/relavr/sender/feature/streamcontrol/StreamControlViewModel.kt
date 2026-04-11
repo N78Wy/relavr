@@ -4,12 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import io.relavr.sender.core.model.CodecPreference
-import io.relavr.sender.core.model.DiscoveredReceiver
 import io.relavr.sender.core.model.ReceiverConnectPayloadCodec
-import io.relavr.sender.core.model.ReceiverDiscoveryPhase
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.VideoResolution
-import io.relavr.sender.core.session.ReceiverDiscoveryController
 import io.relavr.sender.core.session.StreamingSessionController
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -24,27 +21,20 @@ import kotlinx.coroutines.launch
 
 class StreamControlViewModel(
     private val sessionController: StreamingSessionController,
-    private val discoveryController: ReceiverDiscoveryController,
     initialConfig: StreamConfig = StreamConfig(),
 ) : ViewModel() {
     private val config = MutableStateFlow(initialConfig)
     private val qrScannerState = MutableStateFlow(QrScannerState())
-    private val screenActive = MutableStateFlow(false)
-    private val pendingDiscoveryReceiver = MutableStateFlow<DiscoveredReceiver?>(null)
 
     val uiState: StateFlow<StreamControlUiState> =
         combine(
             config,
             qrScannerState,
-            discoveryController.observeState(),
-            pendingDiscoveryReceiver,
             sessionController.observeState(),
-        ) { currentConfig, currentQrScannerState, discoveryState, pendingReceiver, sessionState ->
+        ) { currentConfig, currentQrScannerState, sessionState ->
             buildStreamControlUiState(
                 config = currentConfig,
                 scannerState = currentQrScannerState,
-                discoveryState = discoveryState,
-                pendingReceiver = pendingReceiver,
                 sessionSnapshot = sessionState,
             )
         }.stateIn(
@@ -54,8 +44,6 @@ class StreamControlViewModel(
                 buildStreamControlUiState(
                     config = initialConfig,
                     scannerState = qrScannerState.value,
-                    discoveryState = discoveryController.observeState().value,
-                    pendingReceiver = pendingDiscoveryReceiver.value,
                     sessionSnapshot = sessionController.observeState().value,
                 ),
         )
@@ -79,25 +67,6 @@ class StreamControlViewModel(
                         } else {
                             current.copy(codecPreference = capabilities.defaultCodec)
                         }
-                    }
-                }
-        }
-        viewModelScope.launch {
-            var discoveryRunning = false
-            combine(
-                screenActive,
-                sessionController.observeState().map(::isConfigEditable),
-            ) { active, editable -> active to editable }
-                .distinctUntilChanged()
-                .collect { (active, editable) ->
-                    val shouldDiscover = active && editable
-                    if (shouldDiscover && !discoveryRunning) {
-                        discoveryController.start()
-                        discoveryRunning =
-                            discoveryController.observeState().value.phase == ReceiverDiscoveryPhase.Discovering
-                    } else if (!shouldDiscover && discoveryRunning) {
-                        discoveryController.stop()
-                        discoveryRunning = false
                     }
                 }
         }
@@ -171,43 +140,6 @@ class StreamControlViewModel(
         }
     }
 
-    fun onDiscoveryRefreshClicked() {
-        viewModelScope.launch {
-            discoveryController.refresh()
-        }
-    }
-
-    fun onDiscoveredReceiverClicked(receiver: DiscoveredReceiver) {
-        pendingDiscoveryReceiver.value = receiver
-    }
-
-    fun onDiscoveryConnectionDismissed() {
-        pendingDiscoveryReceiver.value = null
-    }
-
-    fun onDiscoveryConnectionConfirmed() {
-        val receiver = pendingDiscoveryReceiver.value ?: return
-        pendingDiscoveryReceiver.value = null
-        val updatedConfig =
-            config.value.copy(
-                signalingEndpoint = receiver.webSocketUrl,
-                sessionId = receiver.sessionId,
-            )
-        config.value = updatedConfig
-
-        viewModelScope.launch {
-            sessionController.start(updatedConfig)
-        }
-    }
-
-    fun onScreenStarted() {
-        screenActive.value = true
-    }
-
-    fun onScreenStopped() {
-        screenActive.value = false
-    }
-
     fun onResolutionChanged(resolution: VideoResolution) {
         config.update { current ->
             current.copy(resolution = resolution)
@@ -241,17 +173,10 @@ class StreamControlViewModel(
 
 class StreamControlViewModelFactory(
     private val sessionController: StreamingSessionController,
-    private val discoveryController: ReceiverDiscoveryController,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
         StreamControlViewModel(
             sessionController = sessionController,
-            discoveryController = discoveryController,
         ) as T
 }
-
-private fun isConfigEditable(snapshot: io.relavr.sender.core.model.StreamingSessionSnapshot): Boolean =
-    !snapshot.isStreaming &&
-        snapshot.captureState != io.relavr.sender.core.model.CaptureState.RequestingPermission &&
-        snapshot.publishState != io.relavr.sender.core.model.PublishState.Preparing

@@ -22,3 +22,17 @@ data class ReceiverConnectionInfo(
         const val CURRENT_PROTOCOL_VERSION = 1
     }
 }
+
+private fun formatHostAndPort(
+    host: String,
+    port: Int,
+): String = "${formatHostForUri(host)}:$port"
+
+private fun formatHostForUri(host: String): String {
+    val trimmedHost = host.trim()
+    return if (':' in trimmedHost && !trimmedHost.startsWith('[') && !trimmedHost.endsWith(']')) {
+        "[$trimmedHost]"
+    } else {
+        trimmedHost
+    }
+}

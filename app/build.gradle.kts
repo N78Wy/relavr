@@ -18,7 +18,6 @@ dependencies {
     implementation(project(":core:session"))
     implementation(project(":feature:stream-control"))
     implementation(project(":platform:android-capture"))
-    implementation(project(":platform:discovery"))
     implementation(project(":platform:media-codec"))
     implementation(project(":platform:webrtc"))
     implementation(libs.androidx.activity.compose)
