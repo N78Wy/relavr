@@ -66,6 +66,9 @@ class MainActivity : ComponentActivity() {
                         onSessionIdChanged = viewModel::onSessionIdChanged,
                         onCodecPreferenceChanged = viewModel::onCodecPreferenceChanged,
                         onAudioEnabledChanged = viewModel::onAudioEnabledChanged,
+                        onResolutionChanged = viewModel::onResolutionChanged,
+                        onFpsChanged = viewModel::onFpsChanged,
+                        onBitrateChanged = viewModel::onBitrateChanged,
                         onStartClicked = viewModel::onStartClicked,
                         onStopClicked = viewModel::onStopClicked,
                     )

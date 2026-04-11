@@ -6,6 +6,7 @@ import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.StreamConfig
+import io.relavr.sender.core.model.VideoResolution
 import io.relavr.sender.core.session.StreamingSessionCoordinator
 import io.relavr.sender.testing.fakes.FakeAppLogger
 import io.relavr.sender.testing.fakes.FakeAudioCaptureSource
@@ -68,6 +69,9 @@ class ForegroundServiceStreamingSessionIntegrationTest {
             val config =
                 StreamConfig(
                     codecPreference = CodecPreference.HEVC,
+                    resolution = VideoResolution(width = 1920, height = 1080),
+                    fps = 60,
+                    bitrateKbps = 8000,
                     signalingEndpoint = VALID_SIGNALING_ENDPOINT,
                 )
             controller.start(config)
@@ -85,6 +89,12 @@ class ForegroundServiceStreamingSessionIntegrationTest {
             assertEquals(AudioStreamState.Publishing, controller.observeState().value.audioState)
             assertEquals("WebRTC 已连接，正在发送音视频", controller.observeState().value.statusDetail)
             assertEquals(CodecPreference.HEVC, signalingClient.lastOpenedConfig?.codecPreference)
+            assertEquals(VideoResolution(width = 1920, height = 1080), signalingClient.lastOpenedConfig?.resolution)
+            assertEquals(60, signalingClient.lastOpenedConfig?.fps)
+            assertEquals(8000, signalingClient.lastOpenedConfig?.bitrateKbps)
+            assertEquals(VideoResolution(width = 1920, height = 1080), rtcPublisherFactory.lastConfig?.resolution)
+            assertEquals(60, rtcPublisherFactory.lastConfig?.fps)
+            assertEquals(8000, rtcPublisherFactory.lastConfig?.bitrateKbps)
             assertEquals(1, rtcPublisherFactory.session.publishCount)
             assertEquals(1, signalingClient.openCount)
         }

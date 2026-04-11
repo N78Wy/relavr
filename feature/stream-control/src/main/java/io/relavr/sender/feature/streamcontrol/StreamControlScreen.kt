@@ -3,18 +3,23 @@ package io.relavr.sender.feature.streamcontrol
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -22,6 +27,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,11 +37,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
+import io.relavr.sender.core.model.VideoResolution
 
 object StreamControlTestTags {
     const val START_BUTTON = "stream-start"
@@ -43,8 +51,21 @@ object StreamControlTestTags {
     const val AUDIO_SWITCH = "stream-audio-switch"
     const val SIGNALING_ENDPOINT_INPUT = "stream-signaling-endpoint"
     const val SESSION_ID_INPUT = "stream-session-id"
+    const val STREAM_PROFILE_CARD = "stream-profile-card"
 
     fun codecOption(preference: CodecPreference): String = "stream-codec-option-${preference.name.lowercase()}"
+
+    fun resolutionOption(resolution: VideoResolution): String = "stream-resolution-option-${resolution.width}x${resolution.height}"
+
+    fun fpsOption(fps: Int): String = "stream-fps-option-$fps"
+
+    fun bitrateOption(bitrateKbps: Int): String = "stream-bitrate-option-$bitrateKbps"
+}
+
+private enum class StreamControlLayoutMode {
+    Compact,
+    Medium,
+    Expanded,
 }
 
 @Composable
@@ -54,11 +75,14 @@ fun streamControlScreen(
     onSessionIdChanged: (String) -> Unit,
     onCodecPreferenceChanged: (CodecPreference) -> Unit,
     onAudioEnabledChanged: (Boolean) -> Unit,
+    onResolutionChanged: (VideoResolution) -> Unit,
+    onFpsChanged: (Int) -> Unit,
+    onBitrateChanged: (Int) -> Unit,
     onStartClicked: () -> Unit,
     onStopClicked: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(
+    BoxWithConstraints(
         modifier =
             modifier
                 .fillMaxSize()
@@ -68,46 +92,108 @@ fun streamControlScreen(
                             colors =
                                 listOf(
                                     Color(0xFF07111F),
-                                    Color(0xFF14273D),
-                                    Color(0xFF233C57),
+                                    Color(0xFF11253A),
+                                    Color(0xFF1D3B58),
                                 ),
                         ),
                 ),
     ) {
-        LazyColumn(
+        val layoutMode =
+            when {
+                maxWidth < 600.dp -> StreamControlLayoutMode.Compact
+                maxWidth < 840.dp -> StreamControlLayoutMode.Medium
+                else -> StreamControlLayoutMode.Expanded
+            }
+        val horizontalPadding =
+            when (layoutMode) {
+                StreamControlLayoutMode.Compact -> 16.dp
+                StreamControlLayoutMode.Medium -> 24.dp
+                StreamControlLayoutMode.Expanded -> 28.dp
+            }
+
+        Box(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentAlignment = Alignment.TopCenter,
         ) {
-            item {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .streamContentWidth(layoutMode)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = horizontalPadding, vertical = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
                 heroCard(
                     title = uiState.title,
                     statusLabel = uiState.statusLabel,
                     statusDescription = uiState.statusDescription,
                 )
-            }
-            item {
-                configCard(
-                    uiState = uiState,
-                    onSignalingEndpointChanged = onSignalingEndpointChanged,
-                    onSessionIdChanged = onSessionIdChanged,
-                    onCodecPreferenceChanged = onCodecPreferenceChanged,
-                    onAudioEnabledChanged = onAudioEnabledChanged,
-                )
-            }
-            item {
-                metricsCard(uiState = uiState)
-            }
-            item {
-                actionCard(
-                    uiState = uiState,
-                    onStartClicked = onStartClicked,
-                    onStopClicked = onStopClicked,
-                )
-            }
-            uiState.errorMessage?.let { errorMessage ->
-                item {
-                    errorCard(message = errorMessage)
+
+                if (layoutMode == StreamControlLayoutMode.Expanded) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1.15f),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            configCard(
+                                uiState = uiState,
+                                layoutMode = layoutMode,
+                                onSignalingEndpointChanged = onSignalingEndpointChanged,
+                                onSessionIdChanged = onSessionIdChanged,
+                                onCodecPreferenceChanged = onCodecPreferenceChanged,
+                                onAudioEnabledChanged = onAudioEnabledChanged,
+                            )
+                        }
+                        Column(
+                            modifier = Modifier.weight(0.85f),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            streamProfileCard(
+                                uiState = uiState,
+                                onResolutionChanged = onResolutionChanged,
+                                onFpsChanged = onFpsChanged,
+                                onBitrateChanged = onBitrateChanged,
+                            )
+                            actionCard(
+                                uiState = uiState,
+                                layoutMode = layoutMode,
+                                onStartClicked = onStartClicked,
+                                onStopClicked = onStopClicked,
+                            )
+                            uiState.errorMessage?.let { errorMessage ->
+                                errorCard(message = errorMessage)
+                            }
+                        }
+                    }
+                } else {
+                    configCard(
+                        uiState = uiState,
+                        layoutMode = layoutMode,
+                        onSignalingEndpointChanged = onSignalingEndpointChanged,
+                        onSessionIdChanged = onSessionIdChanged,
+                        onCodecPreferenceChanged = onCodecPreferenceChanged,
+                        onAudioEnabledChanged = onAudioEnabledChanged,
+                    )
+                    streamProfileCard(
+                        uiState = uiState,
+                        onResolutionChanged = onResolutionChanged,
+                        onFpsChanged = onFpsChanged,
+                        onBitrateChanged = onBitrateChanged,
+                    )
+                    actionCard(
+                        uiState = uiState,
+                        layoutMode = layoutMode,
+                        onStartClicked = onStartClicked,
+                        onStopClicked = onStopClicked,
+                    )
+                    uiState.errorMessage?.let { errorMessage ->
+                        errorCard(message = errorMessage)
+                    }
                 }
             }
         }
@@ -125,18 +211,19 @@ private fun heroCard(
             text = title,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(modifier = Modifier.height(10.dp))
         Text(
             text = statusLabel,
             style = MaterialTheme.typography.titleLarge,
-            color = Color(0xFF7DE2A7),
+            color = MaterialTheme.colorScheme.primary,
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = statusDescription,
             style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFFD6E2F0),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -144,6 +231,7 @@ private fun heroCard(
 @Composable
 private fun configCard(
     uiState: StreamControlUiState,
+    layoutMode: StreamControlLayoutMode,
     onSignalingEndpointChanged: (String) -> Unit,
     onSessionIdChanged: (String) -> Unit,
     onCodecPreferenceChanged: (CodecPreference) -> Unit,
@@ -154,12 +242,13 @@ private fun configCard(
             text = "发送配置",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = "视频编码",
             style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFFD6E2F0),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(12.dp))
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -174,7 +263,7 @@ private fun configCard(
         Text(
             text = uiState.codecStatusLabel,
             style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFFB8D5F1),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(16.dp))
         OutlinedTextField(
@@ -184,6 +273,7 @@ private fun configCard(
             placeholder = { Text("例如 ws://192.168.1.20:8080/ws") },
             singleLine = true,
             enabled = uiState.configEditable,
+            colors = streamTextFieldColors(),
             modifier =
                 Modifier
                     .fillMaxWidth()
@@ -193,7 +283,7 @@ private fun configCard(
         Text(
             text = "Quest 3 实机请填写开发机局域网地址，例如 ws://192.168.1.20:8080/ws；10.0.2.2 仅适用于 Android 模拟器。",
             style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFFB8D5F1),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(12.dp))
         OutlinedTextField(
@@ -202,6 +292,7 @@ private fun configCard(
             label = { Text("Session ID") },
             singleLine = true,
             enabled = uiState.configEditable,
+            colors = streamTextFieldColors(),
             modifier =
                 Modifier
                     .fillMaxWidth()
@@ -211,33 +302,57 @@ private fun configCard(
         Text(
             text = "ICE 默认使用 Google STUN，可在后续阶段扩展 TURN / 鉴权。",
             style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFFB8D5F1),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(16.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column {
-                Text(
-                    text = "音频采集",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Medium,
-                )
-                Text(
-                    text = uiState.audioStatusLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFFD6E2F0),
+
+        if (layoutMode == StreamControlLayoutMode.Compact) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                audioSummary(uiState.audioStatusLabel)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    Switch(
+                        checked = uiState.audioEnabled,
+                        onCheckedChange = onAudioEnabledChanged,
+                        enabled = uiState.audioToggleEnabled,
+                        modifier = Modifier.testTag(StreamControlTestTags.AUDIO_SWITCH),
+                    )
+                }
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                audioSummary(uiState.audioStatusLabel)
+                Switch(
+                    checked = uiState.audioEnabled,
+                    onCheckedChange = onAudioEnabledChanged,
+                    enabled = uiState.audioToggleEnabled,
+                    modifier = Modifier.testTag(StreamControlTestTags.AUDIO_SWITCH),
                 )
             }
-            Switch(
-                checked = uiState.audioEnabled,
-                onCheckedChange = onAudioEnabledChanged,
-                enabled = uiState.audioToggleEnabled,
-                modifier = Modifier.testTag(StreamControlTestTags.AUDIO_SWITCH),
-            )
         }
+    }
+}
+
+@Composable
+private fun audioSummary(audioStatusLabel: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = "音频采集",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = audioStatusLabel,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -258,10 +373,10 @@ private fun codecOptionButton(
             modifier = modifier,
             colors =
                 ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF245C87),
-                    contentColor = Color.White,
-                    disabledContainerColor = Color(0xFF2B3E52),
-                    disabledContentColor = Color(0xFFB8D5F1),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
         ) {
@@ -283,6 +398,11 @@ private fun codecOptionButton(
             enabled = option.enabled,
             modifier = modifier,
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+            colors =
+                ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
         ) {
             Column(horizontalAlignment = Alignment.Start, modifier = Modifier.fillMaxWidth()) {
                 Text(
@@ -293,6 +413,7 @@ private fun codecOptionButton(
                 Text(
                     text = option.supportLabel,
                     style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -300,18 +421,123 @@ private fun codecOptionButton(
 }
 
 @Composable
-private fun metricsCard(uiState: StreamControlUiState) {
-    surfaceCard {
+private fun streamProfileCard(
+    uiState: StreamControlUiState,
+    onResolutionChanged: (VideoResolution) -> Unit,
+    onFpsChanged: (Int) -> Unit,
+    onBitrateChanged: (Int) -> Unit,
+) {
+    surfaceCard(modifier = Modifier.testTag(StreamControlTestTags.STREAM_PROFILE_CARD)) {
         Text(
-            text = "默认规格",
+            text = "视频规格",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
         )
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            metricBadge(label = "分辨率", value = uiState.resolutionLabel)
-            metricBadge(label = "帧率", value = uiState.fpsLabel)
-            metricBadge(label = "码率", value = uiState.bitrateLabel)
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "当前规格：${uiState.streamProfileSummary}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        selectionGroup(
+            title = "分辨率",
+            options = uiState.resolutionOptions,
+            tagOf = StreamControlTestTags::resolutionOption,
+            onSelected = onResolutionChanged,
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        selectionGroup(
+            title = "帧率",
+            options = uiState.fpsOptions,
+            tagOf = StreamControlTestTags::fpsOption,
+            onSelected = onFpsChanged,
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        selectionGroup(
+            title = "码率",
+            options = uiState.bitrateOptions,
+            tagOf = StreamControlTestTags::bitrateOption,
+            onSelected = onBitrateChanged,
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun <T> selectionGroup(
+    title: String,
+    options: List<SelectionOptionUiState<T>>,
+    tagOf: (T) -> String,
+    onSelected: (T) -> Unit,
+) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Medium,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        options.forEach { option ->
+            selectionOptionButton(
+                option = option,
+                testTag = tagOf(option.value),
+                onSelected = onSelected,
+            )
+        }
+    }
+}
+
+@Composable
+private fun <T> selectionOptionButton(
+    option: SelectionOptionUiState<T>,
+    testTag: String,
+    onSelected: (T) -> Unit,
+) {
+    val modifier =
+        Modifier
+            .defaultMinSize(minWidth = 110.dp)
+            .testTag(testTag)
+
+    if (option.selected) {
+        Button(
+            onClick = { onSelected(option.value) },
+            enabled = option.enabled,
+            modifier = modifier,
+            colors =
+                ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+        ) {
+            Text(
+                text = option.label,
+                textAlign = TextAlign.Center,
+            )
+        }
+    } else {
+        OutlinedButton(
+            onClick = { onSelected(option.value) },
+            enabled = option.enabled,
+            modifier = modifier,
+            colors =
+                ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+        ) {
+            Text(
+                text = option.label,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }
@@ -319,40 +545,69 @@ private fun metricsCard(uiState: StreamControlUiState) {
 @Composable
 private fun actionCard(
     uiState: StreamControlUiState,
+    layoutMode: StreamControlLayoutMode,
     onStartClicked: () -> Unit,
     onStopClicked: () -> Unit,
 ) {
     surfaceCard {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column {
-                Text(
-                    text = "会话控制",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = "开始后会先请求 MediaProjection 授权，再进入 WebRTC 建链",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFFD6E2F0),
-                )
-            }
-            Row {
+        Text(
+            text = "会话控制",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "开始后会先请求 MediaProjection 授权，再进入 WebRTC 建链。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        if (layoutMode == StreamControlLayoutMode.Compact) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
                     onClick = onStartClicked,
                     enabled = uiState.startEnabled,
-                    modifier = Modifier.testTag(StreamControlTestTags.START_BUTTON),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag(StreamControlTestTags.START_BUTTON),
                 ) {
                     Text("开始推流")
                 }
-                Spacer(modifier = Modifier.width(12.dp))
                 OutlinedButton(
                     onClick = onStopClicked,
                     enabled = uiState.stopEnabled,
-                    modifier = Modifier.testTag(StreamControlTestTags.STOP_BUTTON),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag(StreamControlTestTags.STOP_BUTTON),
+                ) {
+                    Text("停止")
+                }
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Button(
+                    onClick = onStartClicked,
+                    enabled = uiState.startEnabled,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .testTag(StreamControlTestTags.START_BUTTON),
+                ) {
+                    Text("开始推流")
+                }
+                OutlinedButton(
+                    onClick = onStopClicked,
+                    enabled = uiState.stopEnabled,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .testTag(StreamControlTestTags.STOP_BUTTON),
                 ) {
                     Text("停止")
                 }
@@ -364,7 +619,10 @@ private fun actionCard(
 @Composable
 private fun errorCard(message: String) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF4F1E28)),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.92f),
+            ),
         shape = RoundedCornerShape(24.dp),
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
@@ -372,49 +630,30 @@ private fun errorCard(message: String) {
                 text = "异常",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = Color(0xFFFFC1C1),
+                color = MaterialTheme.colorScheme.onErrorContainer,
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFFFFE7E7),
+                color = MaterialTheme.colorScheme.onErrorContainer,
             )
         }
     }
 }
 
 @Composable
-private fun metricBadge(
-    label: String,
-    value: String,
+private fun surfaceCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0x223CA3FF)),
-        shape = RoundedCornerShape(18.dp),
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = Color(0xFFB8D5F1),
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleSmall,
-                color = Color.White,
-                fontWeight = FontWeight.Medium,
-            )
-        }
-    }
-}
-
-@Composable
-private fun surfaceCard(content: @Composable ColumnScope.() -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xCC0E1C2D)),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+            ),
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
@@ -424,7 +663,34 @@ private fun surfaceCard(content: @Composable ColumnScope.() -> Unit) {
     }
 }
 
-@Preview
+@Composable
+private fun streamTextFieldColors() =
+    OutlinedTextFieldDefaults.colors(
+        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+        focusedContainerColor = Color.Transparent,
+        unfocusedContainerColor = Color.Transparent,
+        disabledContainerColor = Color.Transparent,
+        focusedBorderColor = MaterialTheme.colorScheme.primary,
+        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+        disabledBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+        focusedLabelColor = MaterialTheme.colorScheme.primary,
+        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        cursorColor = MaterialTheme.colorScheme.primary,
+        focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+private fun Modifier.streamContentWidth(layoutMode: StreamControlLayoutMode): Modifier =
+    when (layoutMode) {
+        StreamControlLayoutMode.Compact -> fillMaxWidth()
+        StreamControlLayoutMode.Medium -> fillMaxWidth().widthIn(max = 720.dp)
+        StreamControlLayoutMode.Expanded -> fillMaxWidth().widthIn(max = 1040.dp)
+    }
+
+@Preview(widthDp = 700, heightDp = 1200)
 @Composable
 private fun streamControlScreenPreview() {
     streamControlScreen(
@@ -437,6 +703,9 @@ private fun streamControlScreenPreview() {
         onSessionIdChanged = {},
         onCodecPreferenceChanged = {},
         onAudioEnabledChanged = {},
+        onResolutionChanged = {},
+        onFpsChanged = {},
+        onBitrateChanged = {},
         onStartClicked = {},
         onStopClicked = {},
     )

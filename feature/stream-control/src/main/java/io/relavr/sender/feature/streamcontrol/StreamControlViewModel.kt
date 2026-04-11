@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.StreamConfig
+import io.relavr.sender.core.model.VideoResolution
 import io.relavr.sender.core.session.StreamingSessionController
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -87,6 +88,24 @@ class StreamControlViewModel(
     fun onAudioEnabledChanged(enabled: Boolean) {
         config.update { current ->
             current.copy(audioEnabled = enabled)
+        }
+    }
+
+    fun onResolutionChanged(resolution: VideoResolution) {
+        config.update { current ->
+            current.copy(resolution = resolution)
+        }
+    }
+
+    fun onFpsChanged(fps: Int) {
+        config.update { current ->
+            current.copy(fps = fps)
+        }
+    }
+
+    fun onBitrateChanged(bitrateKbps: Int) {
+        config.update { current ->
+            current.copy(bitrateKbps = bitrateKbps)
         }
     }
 

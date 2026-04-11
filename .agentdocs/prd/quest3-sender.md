@@ -11,8 +11,8 @@
 - 使用 Kotlin + Gradle Kotlin DSL + Jetpack Compose + Coroutines/Flow。
 - 采用中度扩展的 Android 多模块结构，保留 `app`、`feature`、`core`、`platform`、`testing` 分层。
 - 默认编码偏好为 H.264 优先；发送控制台支持在开播前切换到 HEVC、VP8、VP9，实际可选集合由设备 MediaCodec 与 libwebrtc 能力交集决定。
+- 发送控制台支持在开播前切换分辨率、帧率和码率，当前使用内置安全档位而非自由输入。
 - 音频按独立模块接缝设计，首版先预留 AudioPlaybackCapture 能力与错误模型，不引入 native WebRTC 音频扩展。
-
 ## 非目标
 - 不实现房间、多路流、鉴权、录制、转码。
 - 不实现 Meta 官方投屏兼容逻辑。

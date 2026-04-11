@@ -6,6 +6,7 @@ import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
+import io.relavr.sender.core.model.VideoResolution
 import io.relavr.sender.testing.fakes.FakeAppLogger
 import io.relavr.sender.testing.fakes.FakeStreamingSessionController
 import io.relavr.sender.testing.fakes.TestAppDispatchers
@@ -41,6 +42,9 @@ class ForegroundServiceStreamingSessionControllerTest {
                 StreamConfig(
                     audioEnabled = false,
                     codecPreference = CodecPreference.HEVC,
+                    resolution = VideoResolution(width = 1920, height = 1080),
+                    fps = 60,
+                    bitrateKbps = 8000,
                     signalingEndpoint = VALID_SIGNALING_ENDPOINT,
                 )
             controller.start(config)

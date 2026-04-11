@@ -6,11 +6,19 @@ import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
+import io.relavr.sender.core.model.VideoResolution
 
 data class CodecOptionUiState(
     val preference: CodecPreference,
     val label: String,
     val supportLabel: String,
+    val selected: Boolean,
+    val enabled: Boolean,
+)
+
+data class SelectionOptionUiState<T>(
+    val value: T,
+    val label: String,
     val selected: Boolean,
     val enabled: Boolean,
 )
@@ -27,9 +35,10 @@ data class StreamControlUiState(
     val audioEnabled: Boolean,
     val audioToggleEnabled: Boolean,
     val audioStatusLabel: String,
-    val resolutionLabel: String,
-    val fpsLabel: String,
-    val bitrateLabel: String,
+    val streamProfileSummary: String,
+    val resolutionOptions: List<SelectionOptionUiState<VideoResolution>>,
+    val fpsOptions: List<SelectionOptionUiState<Int>>,
+    val bitrateOptions: List<SelectionOptionUiState<Int>>,
     val startEnabled: Boolean,
     val stopEnabled: Boolean,
     val errorMessage: String?,
@@ -70,9 +79,25 @@ internal fun buildStreamControlUiState(
             configEditable &&
                 capabilities?.audioPlaybackCaptureSupported != false,
         audioStatusLabel = sessionSnapshot.toAudioStatusLabel(config),
-        resolutionLabel = config.resolution.label,
-        fpsLabel = "${config.fps} FPS",
-        bitrateLabel = "${config.bitrateKbps} kbps",
+        streamProfileSummary = "${config.resolution.label} / ${config.fps} FPS / ${config.bitrateKbps} kbps",
+        resolutionOptions =
+            buildSelectionOptions(
+                options = StreamConfig.RESOLUTION_OPTIONS,
+                selectedValue = config.resolution,
+                enabled = configEditable,
+            ) { option -> option.label },
+        fpsOptions =
+            buildSelectionOptions(
+                options = StreamConfig.FPS_OPTIONS,
+                selectedValue = config.fps,
+                enabled = configEditable,
+            ) { option -> "$option FPS" },
+        bitrateOptions =
+            buildSelectionOptions(
+                options = StreamConfig.BITRATE_OPTIONS_KBPS,
+                selectedValue = config.bitrateKbps,
+                enabled = configEditable,
+            ) { option -> "$option kbps" },
         startEnabled = configValid && configEditable,
         stopEnabled =
             hasActiveSession &&
@@ -82,6 +107,21 @@ internal fun buildStreamControlUiState(
         errorMessage = sessionSnapshot.error?.message,
     )
 }
+
+private fun <T> buildSelectionOptions(
+    options: List<T>,
+    selectedValue: T,
+    enabled: Boolean,
+    labelOf: (T) -> String,
+): List<SelectionOptionUiState<T>> =
+    options.map { option ->
+        SelectionOptionUiState(
+            value = option,
+            label = labelOf(option),
+            selected = option == selectedValue,
+            enabled = enabled,
+        )
+    }
 
 private fun StreamingSessionSnapshot.toStatusLabel(): String =
     when {

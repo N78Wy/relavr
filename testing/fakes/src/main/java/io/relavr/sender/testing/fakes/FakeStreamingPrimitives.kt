@@ -226,6 +226,7 @@ class FakeRtcPublisherFactory(
     val session: FakeRtcPublishSession = FakeRtcPublishSession(),
 ) : RtcPublisherFactory {
     var createCount: Int = 0
+    var lastConfig: StreamConfig? = null
     var lastSignalingSession: SignalingSession? = null
 
     override suspend fun createSession(
@@ -233,6 +234,7 @@ class FakeRtcPublisherFactory(
         signalingSession: SignalingSession,
     ): RtcPublishSession {
         createCount += 1
+        lastConfig = config
         lastSignalingSession = signalingSession
         return session
     }

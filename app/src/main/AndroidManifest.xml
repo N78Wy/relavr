@@ -16,7 +16,15 @@
         android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:resizeableActivity="true">
+            <layout
+                android:defaultWidth="900dp"
+                android:defaultHeight="720dp"
+                android:gravity="center"
+                android:minWidth="600dp"
+                android:minHeight="480dp" />
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

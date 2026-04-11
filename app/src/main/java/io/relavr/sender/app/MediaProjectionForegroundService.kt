@@ -186,11 +186,11 @@ class MediaProjectionForegroundService : Service() {
                 codecPreference = CodecPreference.valueOf(codecName),
                 resolution =
                     VideoResolution(
-                        width = getIntExtra(EXTRA_RESOLUTION_WIDTH, 1280),
-                        height = getIntExtra(EXTRA_RESOLUTION_HEIGHT, 720),
+                        width = getIntExtra(EXTRA_RESOLUTION_WIDTH, StreamConfig.DEFAULT_RESOLUTION.width),
+                        height = getIntExtra(EXTRA_RESOLUTION_HEIGHT, StreamConfig.DEFAULT_RESOLUTION.height),
                     ),
-                fps = getIntExtra(EXTRA_FPS, 30),
-                bitrateKbps = getIntExtra(EXTRA_BITRATE_KBPS, 4000),
+                fps = getIntExtra(EXTRA_FPS, StreamConfig.DEFAULT_FPS),
+                bitrateKbps = getIntExtra(EXTRA_BITRATE_KBPS, StreamConfig.DEFAULT_BITRATE_KBPS),
                 signalingEndpoint =
                     getStringExtra(EXTRA_SIGNALING_ENDPOINT)
                         ?: StreamConfig().signalingEndpoint,

@@ -3,6 +3,7 @@ package io.relavr.sender.feature.streamcontrol
 import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.StreamConfig
+import io.relavr.sender.core.model.VideoResolution
 import io.relavr.sender.testing.fakes.FakeStreamingSessionController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -43,6 +44,12 @@ class StreamControlViewModelTest {
             val state = viewModel.uiState.value
             assertEquals(CodecPreference.H264, state.codecOptions.single { it.selected }.preference)
             assertTrue(state.codecOptions.any { it.preference == CodecPreference.HEVC && it.enabled })
+            assertEquals(StreamConfig.DEFAULT_RESOLUTION, state.resolutionOptions.single { it.selected }.value)
+            assertEquals(StreamConfig.DEFAULT_FPS, state.fpsOptions.single { it.selected }.value)
+            assertEquals(
+                StreamConfig.DEFAULT_BITRATE_KBPS,
+                state.bitrateOptions.single { it.selected }.value,
+            )
             assertEquals("", state.signalingEndpoint)
             assertTrue(state.sessionId.isNotBlank())
             assertTrue(state.audioEnabled)
@@ -58,6 +65,9 @@ class StreamControlViewModelTest {
             viewModel.onSignalingEndpointChanged("wss://signal.example/ws")
             viewModel.onSessionIdChanged("room-42")
             viewModel.onCodecPreferenceChanged(CodecPreference.HEVC)
+            viewModel.onResolutionChanged(VideoResolution(width = 1920, height = 1080))
+            viewModel.onFpsChanged(60)
+            viewModel.onBitrateChanged(8000)
             viewModel.onStartClicked()
             advanceUntilIdle()
 
@@ -65,6 +75,12 @@ class StreamControlViewModelTest {
             assertEquals("wss://signal.example/ws", controller.lastStartConfig?.signalingEndpoint)
             assertEquals("room-42", controller.lastStartConfig?.sessionId)
             assertEquals(CodecPreference.HEVC, controller.lastStartConfig?.codecPreference)
+            assertEquals(
+                VideoResolution(width = 1920, height = 1080),
+                controller.lastStartConfig?.resolution,
+            )
+            assertEquals(60, controller.lastStartConfig?.fps)
+            assertEquals(8000, controller.lastStartConfig?.bitrateKbps)
             assertTrue(controller.lastStartConfig?.audioEnabled ?: false)
         }
 
