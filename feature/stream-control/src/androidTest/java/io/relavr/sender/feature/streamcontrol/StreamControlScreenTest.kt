@@ -31,7 +31,7 @@ class StreamControlScreenTest {
         var stopCount = 0
         var uiState by mutableStateOf(
             buildStreamControlUiState(
-                config = StreamConfig(),
+                config = validConfig(),
                 sessionSnapshot = StreamingSessionSnapshot(),
             ),
         )
@@ -52,7 +52,7 @@ class StreamControlScreenTest {
 
         uiState =
             buildStreamControlUiState(
-                config = StreamConfig(),
+                config = validConfig(),
                 sessionSnapshot =
                     StreamingSessionSnapshot(
                         captureState = CaptureState.Capturing,
@@ -110,6 +110,7 @@ class StreamControlScreenTest {
         composeRule
             .onNodeWithText("Quest 3 实机请填写开发机局域网地址，例如 ws://192.168.1.20:8080/ws；10.0.2.2 仅适用于 Android 模拟器。")
             .fetchSemanticsNode()
+        composeRule.onNodeWithText("例如 ws://192.168.1.20:8080/ws").fetchSemanticsNode()
     }
 
     @Test
@@ -150,5 +151,11 @@ class StreamControlScreenTest {
 
         assertEquals("invalidws://relay.example/ws", lastEndpoint)
         assertEquals("room-77", lastSessionId)
+    }
+
+    private fun validConfig() = StreamConfig(signalingEndpoint = VALID_SIGNALING_ENDPOINT)
+
+    private companion object {
+        const val VALID_SIGNALING_ENDPOINT = "ws://192.168.1.20:8080/ws"
     }
 }

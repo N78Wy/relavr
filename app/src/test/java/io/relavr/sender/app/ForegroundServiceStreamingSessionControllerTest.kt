@@ -34,7 +34,11 @@ class ForegroundServiceStreamingSessionControllerTest {
 
             advanceUntilIdle()
 
-            val config = StreamConfig(audioEnabled = false)
+            val config =
+                StreamConfig(
+                    audioEnabled = false,
+                    signalingEndpoint = VALID_SIGNALING_ENDPOINT,
+                )
             controller.start(config)
 
             assertEquals(1, commandDispatcher.startCount)
@@ -55,7 +59,10 @@ class ForegroundServiceStreamingSessionControllerTest {
                         StreamingSessionSnapshot(
                             captureState = CaptureState.Capturing,
                             publishState = PublishState.Publishing,
-                            resolvedConfig = StreamConfig(),
+                            resolvedConfig =
+                                StreamConfig(
+                                    signalingEndpoint = VALID_SIGNALING_ENDPOINT,
+                                ),
                         ),
                 )
             val commandDispatcher = FakeForegroundServiceCommandDispatcher()
@@ -125,7 +132,7 @@ class ForegroundServiceStreamingSessionControllerTest {
                 )
 
             advanceUntilIdle()
-            controller.start(StreamConfig())
+            controller.start(StreamConfig(signalingEndpoint = VALID_SIGNALING_ENDPOINT))
 
             assertEquals(CaptureState.Error, controller.observeState().value.captureState)
             assertEquals(PublishState.Error, controller.observeState().value.publishState)
@@ -135,4 +142,8 @@ class ForegroundServiceStreamingSessionControllerTest {
             )
             assertEquals(1, logger.errorLogs.size)
         }
+
+    private companion object {
+        const val VALID_SIGNALING_ENDPOINT = "ws://192.168.1.20:8080/ws"
+    }
 }

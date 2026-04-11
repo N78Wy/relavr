@@ -54,7 +54,11 @@ class ForegroundServiceStreamingSessionIntegrationTest {
 
             advanceUntilIdle()
 
-            val config = StreamConfig(codecPreference = CodecPreference.H264)
+            val config =
+                StreamConfig(
+                    codecPreference = CodecPreference.H264,
+                    signalingEndpoint = VALID_SIGNALING_ENDPOINT,
+                )
             controller.start(config)
 
             assertEquals(1, commandDispatcher.startCount)
@@ -71,4 +75,8 @@ class ForegroundServiceStreamingSessionIntegrationTest {
             assertEquals(1, rtcPublisherFactory.session.publishCount)
             assertEquals(1, signalingClient.openCount)
         }
+
+    private companion object {
+        const val VALID_SIGNALING_ENDPOINT = "ws://192.168.1.20:8080/ws"
+    }
 }

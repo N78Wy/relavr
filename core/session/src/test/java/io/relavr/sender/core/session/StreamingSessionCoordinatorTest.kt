@@ -49,7 +49,13 @@ class StreamingSessionCoordinatorTest {
                     logger = logger,
                 )
 
-            coordinator.start(StreamConfig(codecPreference = CodecPreference.H264, audioEnabled = false))
+            coordinator.start(
+                StreamConfig(
+                    codecPreference = CodecPreference.H264,
+                    audioEnabled = false,
+                    signalingEndpoint = VALID_SIGNALING_ENDPOINT,
+                ),
+            )
             advanceUntilIdle()
 
             val state = coordinator.observeState().value
@@ -105,7 +111,12 @@ class StreamingSessionCoordinatorTest {
                     logger = logger,
                 )
 
-            coordinator.start(StreamConfig(audioEnabled = true))
+            coordinator.start(
+                StreamConfig(
+                    audioEnabled = true,
+                    signalingEndpoint = VALID_SIGNALING_ENDPOINT,
+                ),
+            )
             advanceUntilIdle()
 
             val state = coordinator.observeState().value
@@ -144,7 +155,12 @@ class StreamingSessionCoordinatorTest {
                     logger = logger,
                 )
 
-            coordinator.start(StreamConfig(audioEnabled = true))
+            coordinator.start(
+                StreamConfig(
+                    audioEnabled = true,
+                    signalingEndpoint = VALID_SIGNALING_ENDPOINT,
+                ),
+            )
             advanceUntilIdle()
             coordinator.stop()
             advanceUntilIdle()
@@ -176,7 +192,7 @@ class StreamingSessionCoordinatorTest {
                     logger = FakeAppLogger(),
                 )
 
-            coordinator.start(StreamConfig())
+            coordinator.start(StreamConfig(signalingEndpoint = VALID_SIGNALING_ENDPOINT))
             advanceUntilIdle()
             rtcPublisherFactory.session.emitEvent(RtcSessionEvent.Disconnected)
             advanceUntilIdle()
@@ -210,7 +226,7 @@ class StreamingSessionCoordinatorTest {
                     logger = logger,
                 )
 
-            coordinator.start(StreamConfig())
+            coordinator.start(StreamConfig(signalingEndpoint = VALID_SIGNALING_ENDPOINT))
             advanceUntilIdle()
 
             val state = coordinator.observeState().value
@@ -232,4 +248,8 @@ class StreamingSessionCoordinatorTest {
             )
             assertNotNull(logger.errorLogs.single().throwable)
         }
+
+    private companion object {
+        const val VALID_SIGNALING_ENDPOINT = "ws://192.168.1.20:8080/ws"
+    }
 }

@@ -40,8 +40,9 @@ class StreamControlViewModelTest {
 
             val state = viewModel.uiState.value
             assertEquals(CodecPreference.H264.displayName, state.codecLabel)
-            assertTrue(state.signalingEndpoint.startsWith("ws://"))
+            assertEquals("", state.signalingEndpoint)
             assertTrue(state.sessionId.isNotBlank())
+            assertFalse(state.startEnabled)
         }
 
     @Test

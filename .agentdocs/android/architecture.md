@@ -28,6 +28,7 @@
 - MediaProjection 系统授权必须逐次请求，不允许跨推流会话缓存并复用上一次授权结果；相关实现只能在单次开始流程内消费授权结果。
 - sender 侧 WebRTC 建链固定走 `WebSocket + JSON Offer/Answer` 协议，消息类型只包含 `join`、`offer`、`answer`、`ice-candidate`、`leave`、`error` 六类。
 - 首阶段 UI 只开放 `signalingEndpoint` 与 `sessionId` 输入；视频编码固定为 H.264，音频开关仅保留展示与后续扩展入口，不接入真实音轨。
+- 当前联调版本在应用层允许 `ws://` 明文信令，以兼容 Android 模拟器 `10.0.2.2` 和开发机局域网地址；如后续切换为 `wss://`，必须同步收紧 manifest 策略并更新对应回归测试。
 - `demo/browser-preview` 只支持单个 `sessionId` 下的一发一收；sender 可先于 receiver 启动，服务端负责缓存最新 `offer` 与 sender 侧 ICE candidate，供后加入的浏览器补齐建链。
 
 ## 测试基线

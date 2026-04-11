@@ -159,6 +159,7 @@ private fun configCard(
             value = uiState.signalingEndpoint,
             onValueChange = onSignalingEndpointChanged,
             label = { Text("WebSocket 地址") },
+            placeholder = { Text("例如 ws://192.168.1.20:8080/ws") },
             singleLine = true,
             enabled = uiState.configEditable,
             modifier =
