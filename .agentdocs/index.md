@@ -4,6 +4,9 @@
 ## Android 文档
 `android/architecture.md` - 多模块边界、依赖方向、构建约束与测试基线；修改模块结构或公共接口时必读。
 
+## 工具文档
+`tools/signaling/README.md` - WebSocket 信令服务器与应答端，用于真机端到端联调
+
 ## 已完成任务文档
 `workflow/done/260411-implement-plan-bootstrap.md` - 已完成 Quest 3 发送端 Android 多模块骨架初始化，记录实现边界与验证结果。
 `workflow/done/260411-fix-media-projection-foreground-service.md` - 已修复 MediaProjection 缺少 `mediaProjection` 前台服务导致的启动失败，并记录服务化与授权约束。
