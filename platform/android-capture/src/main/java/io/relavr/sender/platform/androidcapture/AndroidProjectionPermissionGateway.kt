@@ -3,6 +3,7 @@ package io.relavr.sender.platform.androidcapture
 import android.app.Activity
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
+import io.relavr.sender.core.session.MediaProjectionPermission
 import io.relavr.sender.core.session.PermissionDeniedException
 import io.relavr.sender.core.session.ProjectionAccess
 import io.relavr.sender.core.session.ProjectionPermissionGateway
@@ -58,6 +59,12 @@ data class AndroidProjectionAccess(
     val resultData: Intent,
 ) : ProjectionAccess {
     override fun close() = Unit
+
+    override fun mediaProjectionPermission(): MediaProjectionPermission =
+        MediaProjectionPermission(
+            resultCode = resultCode,
+            resultData = Intent(resultData),
+        )
 
     fun copyWithFreshIntent(): AndroidProjectionAccess = copy(resultData = Intent(resultData))
 }

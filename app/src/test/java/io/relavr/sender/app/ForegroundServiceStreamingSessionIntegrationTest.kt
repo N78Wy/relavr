@@ -14,8 +14,6 @@ import io.relavr.sender.testing.fakes.FakeProjectionAccess
 import io.relavr.sender.testing.fakes.FakeProjectionPermissionGateway
 import io.relavr.sender.testing.fakes.FakeRtcPublisherFactory
 import io.relavr.sender.testing.fakes.FakeSignalingClient
-import io.relavr.sender.testing.fakes.FakeVideoCaptureSource
-import io.relavr.sender.testing.fakes.FakeVideoCaptureSourceFactory
 import io.relavr.sender.testing.fakes.TestAppDispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -37,7 +35,6 @@ class ForegroundServiceStreamingSessionIntegrationTest {
             val coordinator =
                 StreamingSessionCoordinator(
                     projectionPermissionGateway = FakeProjectionPermissionGateway(nextAccess = projectionAccess),
-                    videoCaptureSourceFactory = FakeVideoCaptureSourceFactory(FakeVideoCaptureSource()),
                     audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(FakeAudioCaptureSource()),
                     codecCapabilityRepository = FakeCodecCapabilityRepository(),
                     codecPolicy = FakeCodecPolicy(),
@@ -70,6 +67,7 @@ class ForegroundServiceStreamingSessionIntegrationTest {
             assertTrue(controller.observeState().value.isStreaming)
             assertEquals(CaptureState.Capturing, controller.observeState().value.captureState)
             assertEquals(PublishState.Publishing, controller.observeState().value.publishState)
+            assertEquals("WebRTC 已连接，正在发送视频", controller.observeState().value.statusDetail)
             assertEquals(1, rtcPublisherFactory.session.publishCount)
             assertEquals(1, signalingClient.openCount)
         }

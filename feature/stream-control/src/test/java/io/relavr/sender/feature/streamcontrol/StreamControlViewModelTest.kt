@@ -39,23 +39,25 @@ class StreamControlViewModelTest {
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
-            assertTrue(state.availableCodecs.contains(CodecPreference.H264))
-            assertTrue(state.availableCodecs.contains(CodecPreference.HEVC))
+            assertEquals(CodecPreference.H264.displayName, state.codecLabel)
+            assertTrue(state.signalingEndpoint.startsWith("ws://"))
+            assertTrue(state.sessionId.isNotBlank())
         }
 
     @Test
-    fun `开始推流前会带上用户选择的配置`() =
+    fun `开始推流前会带上用户填写的信令配置`() =
         runTest(dispatcher.scheduler) {
             val controller = FakeStreamingSessionController()
             val viewModel = StreamControlViewModel(sessionController = controller)
 
-            viewModel.onCodecSelected(CodecPreference.HEVC)
-            viewModel.onAudioEnabledChanged(false)
+            viewModel.onSignalingEndpointChanged("wss://signal.example/ws")
+            viewModel.onSessionIdChanged("room-42")
             viewModel.onStartClicked()
             advanceUntilIdle()
 
             assertEquals(1, controller.startCount)
-            assertEquals(CodecPreference.HEVC, controller.lastStartConfig?.codecPreference)
+            assertEquals("wss://signal.example/ws", controller.lastStartConfig?.signalingEndpoint)
+            assertEquals("room-42", controller.lastStartConfig?.sessionId)
             assertFalse(controller.lastStartConfig?.audioEnabled ?: true)
         }
 }

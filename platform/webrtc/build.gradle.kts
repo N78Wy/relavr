@@ -7,7 +7,12 @@ android {
 }
 
 dependencies {
+    implementation(project(":core:common"))
     implementation(project(":core:model"))
     implementation(project(":core:session"))
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.okhttp)
+    implementation(libs.webrtc.android)
+
+    testImplementation(libs.junit4)
 }

@@ -18,9 +18,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,7 +32,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
 
@@ -40,12 +39,15 @@ object StreamControlTestTags {
     const val START_BUTTON = "stream-start"
     const val STOP_BUTTON = "stream-stop"
     const val AUDIO_SWITCH = "stream-audio-switch"
+    const val SIGNALING_ENDPOINT_INPUT = "stream-signaling-endpoint"
+    const val SESSION_ID_INPUT = "stream-session-id"
 }
 
 @Composable
 fun streamControlScreen(
     uiState: StreamControlUiState,
-    onCodecSelected: (CodecPreference) -> Unit,
+    onSignalingEndpointChanged: (String) -> Unit,
+    onSessionIdChanged: (String) -> Unit,
     onAudioEnabledChanged: (Boolean) -> Unit,
     onStartClicked: () -> Unit,
     onStopClicked: () -> Unit,
@@ -82,7 +84,8 @@ fun streamControlScreen(
             item {
                 configCard(
                     uiState = uiState,
-                    onCodecSelected = onCodecSelected,
+                    onSignalingEndpointChanged = onSignalingEndpointChanged,
+                    onSessionIdChanged = onSessionIdChanged,
                     onAudioEnabledChanged = onAudioEnabledChanged,
                 )
             }
@@ -135,7 +138,8 @@ private fun heroCard(
 @Composable
 private fun configCard(
     uiState: StreamControlUiState,
-    onCodecSelected: (CodecPreference) -> Unit,
+    onSignalingEndpointChanged: (String) -> Unit,
+    onSessionIdChanged: (String) -> Unit,
     onAudioEnabledChanged: (Boolean) -> Unit,
 ) {
     surfaceCard {
@@ -145,20 +149,41 @@ private fun configCard(
             fontWeight = FontWeight.SemiBold,
         )
         Spacer(modifier = Modifier.height(12.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            uiState.availableCodecs.chunked(2).forEach { codecRow ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    codecRow.forEach { codec ->
-                        FilterChip(
-                            selected = codec == uiState.selectedCodec,
-                            onClick = { onCodecSelected(codec) },
-                            enabled = uiState.startEnabled,
-                            label = { Text(codec.displayName) },
-                        )
-                    }
-                }
-            }
-        }
+        Text(
+            text = "视频编码固定为 ${uiState.codecLabel}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color(0xFFD6E2F0),
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        OutlinedTextField(
+            value = uiState.signalingEndpoint,
+            onValueChange = onSignalingEndpointChanged,
+            label = { Text("WebSocket 地址") },
+            singleLine = true,
+            enabled = uiState.configEditable,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .testTag(StreamControlTestTags.SIGNALING_ENDPOINT_INPUT),
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        OutlinedTextField(
+            value = uiState.sessionId,
+            onValueChange = onSessionIdChanged,
+            label = { Text("Session ID") },
+            singleLine = true,
+            enabled = uiState.configEditable,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .testTag(StreamControlTestTags.SESSION_ID_INPUT),
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "ICE 默认使用 Google STUN，可在后续阶段扩展 TURN / 鉴权。",
+            style = MaterialTheme.typography.bodySmall,
+            color = Color(0xFFB8D5F1),
+        )
         Spacer(modifier = Modifier.height(16.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -223,7 +248,7 @@ private fun actionCard(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = "开始前会触发 MediaProjection 系统授权",
+                    text = "开始后会先请求 MediaProjection 授权，再进入 WebRTC 建链",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color(0xFFD6E2F0),
                 )
@@ -321,7 +346,8 @@ private fun streamControlScreenPreview() {
                 config = StreamConfig(),
                 sessionSnapshot = StreamingSessionSnapshot(),
             ),
-        onCodecSelected = {},
+        onSignalingEndpointChanged = {},
+        onSessionIdChanged = {},
         onAudioEnabledChanged = {},
         onStartClicked = {},
         onStopClicked = {},

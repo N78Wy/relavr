@@ -41,6 +41,7 @@ internal class ForegroundServiceStreamingSessionController(
             current.copy(
                 captureState = CaptureState.RequestingPermission,
                 publishState = PublishState.Preparing,
+                statusDetail = "正在启动前台推流服务",
                 error = null,
             )
         }
@@ -60,6 +61,7 @@ internal class ForegroundServiceStreamingSessionController(
             current.copy(
                 captureState = CaptureState.Stopping,
                 publishState = PublishState.Stopping,
+                statusDetail = "正在发送停止命令",
                 error = null,
             )
         }
@@ -92,6 +94,7 @@ internal class ForegroundServiceStreamingSessionController(
                 publishState = PublishState.Error,
                 resolvedConfig = null,
                 codecSelection = null,
+                statusDetail = error.message,
                 error = error,
             )
         }

@@ -14,10 +14,10 @@ import io.relavr.sender.testing.fakes.FakeProjectionAccess
 import io.relavr.sender.testing.fakes.FakeProjectionPermissionGateway
 import io.relavr.sender.testing.fakes.FakeRtcPublisherFactory
 import io.relavr.sender.testing.fakes.FakeSignalingClient
-import io.relavr.sender.testing.fakes.FakeVideoCaptureSource
-import io.relavr.sender.testing.fakes.FakeVideoCaptureSourceFactory
 import io.relavr.sender.testing.fakes.TestAppDispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -25,13 +25,13 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class StreamingSessionCoordinatorTest {
     @Test
     fun `start 成功后进入推流中状态`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val projectionAccess = FakeProjectionAccess()
-            val videoSource = FakeVideoCaptureSource()
             val audioSource = FakeAudioCaptureSource()
             val rtcPublisherFactory = FakeRtcPublisherFactory()
             val signalingClient = FakeSignalingClient()
@@ -40,7 +40,6 @@ class StreamingSessionCoordinatorTest {
             val coordinator =
                 StreamingSessionCoordinator(
                     projectionPermissionGateway = FakeProjectionPermissionGateway(nextAccess = projectionAccess),
-                    videoCaptureSourceFactory = FakeVideoCaptureSourceFactory(videoSource),
                     audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(audioSource),
                     codecCapabilityRepository = FakeCodecCapabilityRepository(),
                     codecPolicy = FakeCodecPolicy(),
@@ -50,14 +49,43 @@ class StreamingSessionCoordinatorTest {
                     logger = logger,
                 )
 
-            coordinator.start(StreamConfig(codecPreference = CodecPreference.H264))
+            coordinator.start(StreamConfig(codecPreference = CodecPreference.H264, audioEnabled = false))
+            advanceUntilIdle()
 
             val state = coordinator.observeState().value
             assertEquals(CaptureState.Capturing, state.captureState)
             assertEquals(PublishState.Publishing, state.publishState)
             assertEquals(1, rtcPublisherFactory.session.publishCount)
             assertEquals(1, signalingClient.openCount)
+            assertEquals("WebRTC 已连接，正在发送视频", state.statusDetail)
             assertNull(state.error)
+        }
+
+    @Test
+    fun `非法配置会直接写入错误状态`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val projectionGateway = FakeProjectionPermissionGateway()
+            val coordinator =
+                StreamingSessionCoordinator(
+                    projectionPermissionGateway = projectionGateway,
+                    audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(),
+                    codecCapabilityRepository = FakeCodecCapabilityRepository(),
+                    codecPolicy = FakeCodecPolicy(),
+                    rtcPublisherFactory = FakeRtcPublisherFactory(),
+                    signalingClient = FakeSignalingClient(),
+                    dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
+                    logger = FakeAppLogger(),
+                )
+
+            coordinator.start(StreamConfig(signalingEndpoint = "https://invalid.example", sessionId = ""))
+            advanceUntilIdle()
+
+            val state = coordinator.observeState().value
+            assertEquals(CaptureState.Error, state.captureState)
+            assertEquals(PublishState.Error, state.publishState)
+            assertEquals(SenderError.InvalidConfig("Session ID 不能为空"), state.error)
+            assertEquals(0, projectionGateway.requestCount)
         }
 
     @Test
@@ -68,7 +96,6 @@ class StreamingSessionCoordinatorTest {
             val coordinator =
                 StreamingSessionCoordinator(
                     projectionPermissionGateway = FakeProjectionPermissionGateway(shouldDeny = true),
-                    videoCaptureSourceFactory = FakeVideoCaptureSourceFactory(),
                     audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(),
                     codecCapabilityRepository = FakeCodecCapabilityRepository(),
                     codecPolicy = FakeCodecPolicy(),
@@ -78,7 +105,8 @@ class StreamingSessionCoordinatorTest {
                     logger = logger,
                 )
 
-            coordinator.start(StreamConfig())
+            coordinator.start(StreamConfig(audioEnabled = true))
+            advanceUntilIdle()
 
             val state = coordinator.observeState().value
             assertEquals(CaptureState.Error, state.captureState)
@@ -99,7 +127,6 @@ class StreamingSessionCoordinatorTest {
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val projectionAccess = FakeProjectionAccess()
-            val videoSource = FakeVideoCaptureSource()
             val audioSource = FakeAudioCaptureSource()
             val rtcPublisherFactory = FakeRtcPublisherFactory()
             val signalingClient = FakeSignalingClient()
@@ -108,7 +135,6 @@ class StreamingSessionCoordinatorTest {
             val coordinator =
                 StreamingSessionCoordinator(
                     projectionPermissionGateway = FakeProjectionPermissionGateway(nextAccess = projectionAccess),
-                    videoCaptureSourceFactory = FakeVideoCaptureSourceFactory(videoSource),
                     audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(audioSource),
                     codecCapabilityRepository = FakeCodecCapabilityRepository(),
                     codecPolicy = FakeCodecPolicy(),
@@ -118,17 +144,48 @@ class StreamingSessionCoordinatorTest {
                     logger = logger,
                 )
 
-            coordinator.start(StreamConfig())
+            coordinator.start(StreamConfig(audioEnabled = true))
+            advanceUntilIdle()
             coordinator.stop()
+            advanceUntilIdle()
 
             val state = coordinator.observeState().value
             assertEquals(CaptureState.Idle, state.captureState)
             assertEquals(PublishState.Idle, state.publishState)
             assertTrue(projectionAccess.closed)
-            assertTrue(videoSource.closed)
             assertTrue(audioSource.closed)
             assertTrue(rtcPublisherFactory.session.closed)
-            assertEquals(1, signalingClient.closeCount)
+            assertEquals(1, signalingClient.session.closeCount)
+        }
+
+    @Test
+    fun `rtc 会话断开后会写入错误状态并释放资源`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val projectionAccess = FakeProjectionAccess()
+            val rtcPublisherFactory = FakeRtcPublisherFactory()
+            val coordinator =
+                StreamingSessionCoordinator(
+                    projectionPermissionGateway = FakeProjectionPermissionGateway(nextAccess = projectionAccess),
+                    audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(),
+                    codecCapabilityRepository = FakeCodecCapabilityRepository(),
+                    codecPolicy = FakeCodecPolicy(),
+                    rtcPublisherFactory = rtcPublisherFactory,
+                    signalingClient = FakeSignalingClient(),
+                    dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
+                    logger = FakeAppLogger(),
+                )
+
+            coordinator.start(StreamConfig())
+            advanceUntilIdle()
+            rtcPublisherFactory.session.emitEvent(RtcSessionEvent.Disconnected)
+            advanceUntilIdle()
+
+            val state = coordinator.observeState().value
+            assertEquals(CaptureState.Error, state.captureState)
+            assertEquals(PublishState.Error, state.publishState)
+            assertEquals(SenderError.PeerConnectionFailed("WebRTC 连接已断开"), state.error)
+            assertTrue(projectionAccess.closed)
         }
 
     @Test
@@ -144,7 +201,6 @@ class StreamingSessionCoordinatorTest {
             val coordinator =
                 StreamingSessionCoordinator(
                     projectionPermissionGateway = FakeProjectionPermissionGateway(),
-                    videoCaptureSourceFactory = FakeVideoCaptureSourceFactory(),
                     audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(),
                     codecCapabilityRepository = FakeCodecCapabilityRepository(),
                     codecPolicy = FakeCodecPolicy(),
@@ -155,6 +211,7 @@ class StreamingSessionCoordinatorTest {
                 )
 
             coordinator.start(StreamConfig())
+            advanceUntilIdle()
 
             val state = coordinator.observeState().value
             assertEquals(CaptureState.Error, state.captureState)

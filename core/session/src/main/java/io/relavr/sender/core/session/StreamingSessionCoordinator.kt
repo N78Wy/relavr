@@ -8,9 +8,15 @@ import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -18,7 +24,6 @@ import java.io.Closeable
 
 class StreamingSessionCoordinator(
     private val projectionPermissionGateway: ProjectionPermissionGateway,
-    private val videoCaptureSourceFactory: VideoCaptureSourceFactory,
     private val audioCaptureSourceFactory: AudioCaptureSourceFactory,
     private val codecCapabilityRepository: CodecCapabilityRepository,
     private val codecPolicy: CodecPolicy,
@@ -29,8 +34,10 @@ class StreamingSessionCoordinator(
 ) : StreamingSessionController {
     private val state = MutableStateFlow(StreamingSessionSnapshot())
     private val sessionMutex = Mutex()
+    private val sessionScope = CoroutineScope(SupervisorJob() + dispatchers.default)
 
     private var activeSession: ActiveSession? = null
+    private var activeSessionToken: Any? = null
 
     override suspend fun refreshCapabilities(): CapabilitySnapshot =
         withContext(dispatchers.io) {
@@ -47,10 +54,21 @@ class StreamingSessionCoordinator(
                 return
             }
 
+            val configError = config.validationError()
+            if (configError != null) {
+                handleFailure(
+                    error = configError,
+                    throwable = null,
+                    operation = "推流配置校验失败",
+                )
+                return
+            }
+
             state.update {
                 it.copy(
                     captureState = CaptureState.RequestingPermission,
                     publishState = PublishState.Preparing,
+                    statusDetail = "正在等待 MediaProjection 系统授权",
                     error = null,
                 )
             }
@@ -69,9 +87,17 @@ class StreamingSessionCoordinator(
                 }
 
             val resources = mutableListOf<Closeable>(projectionAccess)
+            val sessionToken = Any()
+            activeSessionToken = sessionToken
+            var monitorJob: Job? = null
+
             try {
                 state.update {
-                    it.copy(captureState = CaptureState.Starting)
+                    it.copy(
+                        captureState = CaptureState.Starting,
+                        publishState = PublishState.Preparing,
+                        statusDetail = "正在探测设备编码能力",
+                    )
                 }
 
                 val capabilities =
@@ -80,12 +106,6 @@ class StreamingSessionCoordinator(
                     }
                 val selection = codecPolicy.select(config.codecPreference, capabilities)
                 val resolvedConfig = config.copy(codecPreference = selection.resolved)
-
-                val videoSource =
-                    withContext(dispatchers.io) {
-                        videoCaptureSourceFactory.create(projectionAccess, resolvedConfig)
-                    }
-                resources += videoSource
 
                 val audioSource =
                     if (resolvedConfig.audioEnabled) {
@@ -96,26 +116,38 @@ class StreamingSessionCoordinator(
                         null
                     }
 
-                withContext(dispatchers.io) {
-                    signalingClient.open(resolvedConfig)
+                state.update {
+                    it.copy(statusDetail = "正在连接信令服务器")
                 }
+                val signalingSession =
+                    withContext(dispatchers.io) {
+                        signalingClient.open(resolvedConfig)
+                    }
+                resources += signalingSession
 
                 val publishSession =
                     withContext(dispatchers.io) {
-                        rtcPublisherFactory.createSession(resolvedConfig)
+                        rtcPublisherFactory.createSession(resolvedConfig, signalingSession)
                     }
                 resources += publishSession
 
+                monitorJob = observeRtcEvents(sessionToken, publishSession)
+
+                state.update {
+                    it.copy(statusDetail = "正在准备 WebRTC 视频轨道")
+                }
                 withContext(dispatchers.io) {
-                    publishSession.publish(videoSource, audioSource)
+                    publishSession.publish(projectionAccess, audioSource)
                 }
 
                 activeSession =
                     ActiveSession(
+                        token = sessionToken,
                         projectionAccess = projectionAccess,
-                        videoSource = videoSource,
                         audioSource = audioSource,
+                        signalingSession = signalingSession,
                         publishSession = publishSession,
+                        monitorJob = monitorJob,
                     )
 
                 state.update {
@@ -125,14 +157,14 @@ class StreamingSessionCoordinator(
                         resolvedConfig = resolvedConfig,
                         capabilities = capabilities,
                         codecSelection = selection,
+                        statusDetail = "WebRTC 已连接，正在发送视频",
                         error = null,
                     )
                 }
             } catch (throwable: Throwable) {
+                monitorJob?.cancel()
+                activeSessionToken = null
                 resources.closeAllQuietly()
-                withContext(dispatchers.io) {
-                    signalingClient.closeSession()
-                }
                 handleFailure(
                     error = mapError(throwable),
                     throwable = throwable,
@@ -146,10 +178,14 @@ class StreamingSessionCoordinator(
         sessionMutex.withLock {
             val currentSession =
                 activeSession ?: run {
+                    activeSessionToken = null
                     state.update {
                         it.copy(
                             captureState = CaptureState.Idle,
                             publishState = PublishState.Idle,
+                            resolvedConfig = null,
+                            codecSelection = null,
+                            statusDetail = null,
                             error = null,
                         )
                     }
@@ -160,20 +196,20 @@ class StreamingSessionCoordinator(
                 it.copy(
                     captureState = CaptureState.Stopping,
                     publishState = PublishState.Stopping,
+                    statusDetail = "正在释放推流资源",
+                    error = null,
                 )
             }
 
             try {
+                currentSession.monitorJob.cancel()
+                activeSessionToken = null
                 listOfNotNull(
                     currentSession.publishSession,
                     currentSession.audioSource,
-                    currentSession.videoSource,
+                    currentSession.signalingSession,
                     currentSession.projectionAccess,
                 ).closeAllQuietly()
-
-                withContext(dispatchers.io) {
-                    signalingClient.closeSession()
-                }
 
                 activeSession = null
                 state.update {
@@ -182,6 +218,7 @@ class StreamingSessionCoordinator(
                         publishState = PublishState.Idle,
                         resolvedConfig = null,
                         codecSelection = null,
+                        statusDetail = null,
                         error = null,
                     )
                 }
@@ -197,12 +234,87 @@ class StreamingSessionCoordinator(
 
     override fun observeState(): StateFlow<StreamingSessionSnapshot> = state
 
+    private fun observeRtcEvents(
+        sessionToken: Any,
+        publishSession: RtcPublishSession,
+    ): Job =
+        sessionScope.launch {
+            publishSession.events.collect { event ->
+                when (event) {
+                    is RtcSessionEvent.Status -> {
+                        if (activeSessionToken === sessionToken) {
+                            state.update { current ->
+                                current.copy(statusDetail = event.detail)
+                            }
+                        }
+                    }
+
+                    is RtcSessionEvent.Failure ->
+                        terminateFromRtcEvent(
+                            sessionToken = sessionToken,
+                            error = event.error,
+                        )
+
+                    is RtcSessionEvent.CaptureInterrupted ->
+                        terminateFromRtcEvent(
+                            sessionToken = sessionToken,
+                            error = SenderError.CaptureInterrupted(event.reason),
+                        )
+
+                    RtcSessionEvent.Disconnected ->
+                        terminateFromRtcEvent(
+                            sessionToken = sessionToken,
+                            error = SenderError.PeerConnectionFailed("WebRTC 连接已断开"),
+                        )
+                }
+            }
+        }
+
+    private suspend fun terminateFromRtcEvent(
+        sessionToken: Any,
+        error: SenderError,
+    ) {
+        sessionMutex.withLock {
+            val currentSession = activeSession ?: return
+            if (currentSession.token !== sessionToken) {
+                return
+            }
+
+            currentSession.monitorJob.cancel()
+            activeSession = null
+            activeSessionToken = null
+            listOfNotNull(
+                currentSession.publishSession,
+                currentSession.audioSource,
+                currentSession.signalingSession,
+                currentSession.projectionAccess,
+            ).closeAllQuietly()
+
+            logger.error(
+                TAG,
+                "推流会话异常结束: ${error.message}",
+                null,
+            )
+            state.update {
+                it.copy(
+                    captureState = CaptureState.Error,
+                    publishState = PublishState.Error,
+                    resolvedConfig = null,
+                    codecSelection = null,
+                    statusDetail = error.message,
+                    error = error,
+                )
+            }
+        }
+    }
+
     private fun handleFailure(
         error: SenderError,
         throwable: Throwable? = null,
         operation: String,
     ) {
         activeSession = null
+        activeSessionToken = null
         logger.error(
             TAG,
             "$operation: ${error.message}",
@@ -214,6 +326,7 @@ class StreamingSessionCoordinator(
                 publishState = PublishState.Error,
                 resolvedConfig = null,
                 codecSelection = null,
+                statusDetail = error.message,
                 error = error,
             )
         }
@@ -223,14 +336,17 @@ class StreamingSessionCoordinator(
         when (throwable) {
             is PermissionDeniedException -> SenderError.PermissionDenied
             is SenderException -> throwable.error
+            is TimeoutCancellationException -> SenderError.SignalingFailed("等待远端应答超时")
             else -> SenderError.Unexpected(throwable.message ?: "发送会话出现未知错误")
         }
 
     private data class ActiveSession(
+        val token: Any,
         val projectionAccess: ProjectionAccess,
-        val videoSource: VideoCaptureSource,
         val audioSource: AudioCaptureSource?,
+        val signalingSession: SignalingSession,
         val publishSession: RtcPublishSession,
+        val monitorJob: Job,
     )
 
     private companion object {

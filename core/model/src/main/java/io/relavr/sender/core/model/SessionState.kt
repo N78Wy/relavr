@@ -23,6 +23,7 @@ data class StreamingSessionSnapshot(
     val resolvedConfig: StreamConfig? = null,
     val capabilities: CapabilitySnapshot? = null,
     val codecSelection: CodecSelection? = null,
+    val statusDetail: String? = null,
     val error: SenderError? = null,
 ) {
     val isStreaming: Boolean =

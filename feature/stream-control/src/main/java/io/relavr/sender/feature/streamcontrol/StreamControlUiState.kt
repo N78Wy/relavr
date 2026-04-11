@@ -1,6 +1,5 @@
 package io.relavr.sender.feature.streamcontrol
 
-import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.PublishState
@@ -11,8 +10,10 @@ data class StreamControlUiState(
     val title: String,
     val statusLabel: String,
     val statusDescription: String,
-    val availableCodecs: List<CodecPreference>,
-    val selectedCodec: CodecPreference,
+    val codecLabel: String,
+    val signalingEndpoint: String,
+    val sessionId: String,
+    val configEditable: Boolean,
     val audioEnabled: Boolean,
     val audioToggleEnabled: Boolean,
     val audioCapabilityLabel: String,
@@ -29,40 +30,43 @@ internal fun buildStreamControlUiState(
     sessionSnapshot: StreamingSessionSnapshot,
 ): StreamControlUiState {
     val capabilities = sessionSnapshot.capabilities
-    val availableCodecs = capabilities.toCodecOptions()
+    val configEditable =
+        !sessionSnapshot.isStreaming &&
+            sessionSnapshot.captureState != CaptureState.RequestingPermission &&
+            sessionSnapshot.publishState != PublishState.Preparing
+    val configValid = config.validationError() == null
+    val hasActiveSession =
+        sessionSnapshot.captureState != CaptureState.Idle ||
+            sessionSnapshot.publishState != PublishState.Idle
 
     return StreamControlUiState(
         title = "Quest 3 发送控制台",
         statusLabel = sessionSnapshot.toStatusLabel(),
         statusDescription = sessionSnapshot.toStatusDescription(config),
-        availableCodecs = availableCodecs,
-        selectedCodec = config.codecPreference,
+        codecLabel = CodecPreference.H264.displayName,
+        signalingEndpoint = config.signalingEndpoint,
+        sessionId = config.sessionId,
+        configEditable = configEditable,
         audioEnabled = config.audioEnabled,
-        audioToggleEnabled = !sessionSnapshot.isStreaming,
+        audioToggleEnabled = false,
         audioCapabilityLabel =
             if (capabilities?.audioPlaybackCaptureSupported == false) {
-                "音频采集不可用"
+                "当前设备不支持 AudioPlaybackCapture"
             } else {
-                "AudioPlaybackCapture 已接缝"
+                "音频推流将在第二阶段接入"
             },
         resolutionLabel = config.resolution.label,
         fpsLabel = "${config.fps} FPS",
         bitrateLabel = "${config.bitrateKbps} kbps",
-        startEnabled =
-            !sessionSnapshot.isStreaming &&
-                sessionSnapshot.captureState != CaptureState.RequestingPermission &&
-                sessionSnapshot.publishState != PublishState.Preparing,
-        stopEnabled = sessionSnapshot.isStreaming,
+        startEnabled = configValid && configEditable,
+        stopEnabled =
+            hasActiveSession &&
+                sessionSnapshot.captureState != CaptureState.Stopping &&
+                sessionSnapshot.publishState != PublishState.Stopping &&
+                sessionSnapshot.error == null,
         errorMessage = sessionSnapshot.error?.message,
     )
 }
-
-private fun CapabilitySnapshot?.toCodecOptions(): List<CodecPreference> =
-    this
-        ?.supportedCodecs
-        ?.sortedBy(CodecPreference::ordinal)
-        ?.ifEmpty { listOf(CodecPreference.H264) }
-        ?: listOf(CodecPreference.H264)
 
 private fun StreamingSessionSnapshot.toStatusLabel(): String =
     when {
@@ -76,9 +80,12 @@ private fun StreamingSessionSnapshot.toStatusLabel(): String =
 
 private fun StreamingSessionSnapshot.toStatusDescription(config: StreamConfig): String {
     val resolvedCodec = codecSelection?.resolved?.displayName ?: config.codecPreference.displayName
+    statusDetail?.let { detail ->
+        return detail
+    }
     return when {
-        isStreaming -> "当前输出编码：$resolvedCodec"
         error != null -> error?.message.orEmpty()
-        else -> "默认配置：${config.resolution.label} / ${config.fps} FPS / $resolvedCodec"
+        else ->
+            "默认配置：${config.resolution.label} / ${config.fps} FPS / $resolvedCodec / ${config.trimmedSessionId}"
     }
 }

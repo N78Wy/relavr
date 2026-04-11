@@ -166,7 +166,7 @@ class MediaProjectionForegroundService : Service() {
             .build()
 
     private fun StreamingSessionSnapshot.toNotificationText(): String =
-        when {
+        statusDetail?.takeIf { it.isNotBlank() } ?: when {
             isStreaming -> getString(R.string.streaming_notification_streaming)
             captureState == CaptureState.RequestingPermission ->
                 getString(R.string.streaming_notification_waiting_permission)
@@ -194,6 +194,9 @@ class MediaProjectionForegroundService : Service() {
                 signalingEndpoint =
                     getStringExtra(EXTRA_SIGNALING_ENDPOINT)
                         ?: StreamConfig().signalingEndpoint,
+                sessionId =
+                    getStringExtra(EXTRA_SESSION_ID)
+                        ?: StreamConfig().sessionId,
                 iceServers =
                     getStringArrayListExtra(EXTRA_ICE_SERVERS)
                         ?.toList()
@@ -214,6 +217,7 @@ class MediaProjectionForegroundService : Service() {
         private const val EXTRA_FPS = "extra_fps"
         private const val EXTRA_BITRATE_KBPS = "extra_bitrate_kbps"
         private const val EXTRA_SIGNALING_ENDPOINT = "extra_signaling_endpoint"
+        private const val EXTRA_SESSION_ID = "extra_session_id"
         private const val EXTRA_ICE_SERVERS = "extra_ice_servers"
         private const val NOTIFICATION_CHANNEL_ID = "streaming_session"
         private const val NOTIFICATION_ID = 1001
@@ -232,6 +236,7 @@ class MediaProjectionForegroundService : Service() {
                 .putExtra(EXTRA_FPS, config.fps)
                 .putExtra(EXTRA_BITRATE_KBPS, config.bitrateKbps)
                 .putExtra(EXTRA_SIGNALING_ENDPOINT, config.signalingEndpoint)
+                .putExtra(EXTRA_SESSION_ID, config.sessionId)
                 .putStringArrayListExtra(EXTRA_ICE_SERVERS, ArrayList(config.iceServers))
 
         fun createStopIntent(context: Context): Intent =

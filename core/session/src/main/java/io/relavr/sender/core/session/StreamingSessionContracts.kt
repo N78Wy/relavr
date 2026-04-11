@@ -1,26 +1,27 @@
 package io.relavr.sender.core.session
 
+import android.content.Intent
 import io.relavr.sender.core.model.CapabilitySnapshot
+import io.relavr.sender.core.model.CodecPreference
+import io.relavr.sender.core.model.CodecSelection
+import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
+import kotlinx.coroutines.flow.Flow
 import java.io.Closeable
 
-interface ProjectionAccess : Closeable
+data class MediaProjectionPermission(
+    val resultCode: Int,
+    val resultData: Intent,
+)
+
+interface ProjectionAccess : Closeable {
+    fun mediaProjectionPermission(): MediaProjectionPermission? = null
+}
 
 interface ProjectionPermissionGateway {
     suspend fun requestPermission(): ProjectionAccess
 
     fun restoreIfAvailable(): ProjectionAccess?
-}
-
-interface VideoCaptureSource : Closeable {
-    val description: String
-}
-
-fun interface VideoCaptureSourceFactory {
-    suspend fun create(
-        projectionAccess: ProjectionAccess,
-        config: StreamConfig,
-    ): VideoCaptureSource
 }
 
 interface AudioCaptureSource : Closeable {
@@ -40,24 +41,84 @@ interface CodecCapabilityRepository {
 
 fun interface CodecPolicy {
     fun select(
-        preference: io.relavr.sender.core.model.CodecPreference,
+        preference: CodecPreference,
         capabilities: CapabilitySnapshot,
-    ): io.relavr.sender.core.model.CodecSelection
+    ): CodecSelection
+}
+
+sealed interface SignalingMessage {
+    val sessionId: String
+
+    data class Join(
+        override val sessionId: String,
+        val role: String = "sender",
+    ) : SignalingMessage
+
+    data class Offer(
+        override val sessionId: String,
+        val sdp: String,
+    ) : SignalingMessage
+
+    data class Answer(
+        override val sessionId: String,
+        val sdp: String,
+    ) : SignalingMessage
+
+    data class IceCandidate(
+        override val sessionId: String,
+        val candidate: String,
+        val sdpMid: String,
+        val sdpMLineIndex: Int,
+    ) : SignalingMessage
+
+    data class Leave(
+        override val sessionId: String,
+    ) : SignalingMessage
+
+    data class Error(
+        override val sessionId: String,
+        val message: String,
+    ) : SignalingMessage
+}
+
+interface SignalingSession : Closeable {
+    val messages: Flow<SignalingMessage>
+
+    suspend fun send(message: SignalingMessage)
+}
+
+fun interface SignalingClient {
+    suspend fun open(config: StreamConfig): SignalingSession
+}
+
+sealed interface RtcSessionEvent {
+    data class Status(
+        val detail: String,
+    ) : RtcSessionEvent
+
+    data class Failure(
+        val error: SenderError,
+    ) : RtcSessionEvent
+
+    data class CaptureInterrupted(
+        val reason: String,
+    ) : RtcSessionEvent
+
+    data object Disconnected : RtcSessionEvent
 }
 
 interface RtcPublishSession : Closeable {
+    val events: Flow<RtcSessionEvent>
+
     suspend fun publish(
-        videoSource: VideoCaptureSource,
+        projectionAccess: ProjectionAccess,
         audioSource: AudioCaptureSource?,
     )
 }
 
 fun interface RtcPublisherFactory {
-    suspend fun createSession(config: StreamConfig): RtcPublishSession
-}
-
-interface SignalingClient : Closeable {
-    suspend fun open(config: StreamConfig)
-
-    suspend fun closeSession()
+    suspend fun createSession(
+        config: StreamConfig,
+        signalingSession: SignalingSession,
+    ): RtcPublishSession
 }

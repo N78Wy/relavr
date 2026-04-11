@@ -3,7 +3,6 @@ package io.relavr.sender.feature.streamcontrol
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.session.StreamingSessionController
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,9 +44,15 @@ class StreamControlViewModel(
         }
     }
 
-    fun onCodecSelected(codecPreference: CodecPreference) {
+    fun onSignalingEndpointChanged(endpoint: String) {
         config.update { current ->
-            current.copy(codecPreference = codecPreference)
+            current.copy(signalingEndpoint = endpoint)
+        }
+    }
+
+    fun onSessionIdChanged(sessionId: String) {
+        config.update { current ->
+            current.copy(sessionId = sessionId)
         }
     }
 

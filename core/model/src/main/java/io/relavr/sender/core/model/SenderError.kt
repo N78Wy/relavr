@@ -17,7 +17,23 @@ sealed interface SenderError {
         override val message: String,
     ) : SenderError
 
+    data class InvalidConfig(
+        override val message: String,
+    ) : SenderError
+
     data class AudioCaptureUnavailable(
+        override val message: String,
+    ) : SenderError
+
+    data class SignalingFailed(
+        override val message: String,
+    ) : SenderError
+
+    data class PeerConnectionFailed(
+        override val message: String,
+    ) : SenderError
+
+    data class CaptureInterrupted(
         override val message: String,
     ) : SenderError
 

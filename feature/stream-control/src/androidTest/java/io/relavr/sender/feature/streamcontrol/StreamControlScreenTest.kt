@@ -4,10 +4,12 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.PublishState
@@ -37,7 +39,8 @@ class StreamControlScreenTest {
         composeRule.setContent {
             streamControlScreen(
                 uiState = uiState,
-                onCodecSelected = {},
+                onSignalingEndpointChanged = {},
+                onSessionIdChanged = {},
                 onAudioEnabledChanged = {},
                 onStartClicked = { startCount += 1 },
                 onStopClicked = { stopCount += 1 },
@@ -76,7 +79,8 @@ class StreamControlScreenTest {
                                         .Unexpected("mock-error"),
                             ),
                     ),
-                onCodecSelected = {},
+                onSignalingEndpointChanged = {},
+                onSessionIdChanged = {},
                 onAudioEnabledChanged = {},
                 onStartClicked = {},
                 onStopClicked = {},
@@ -84,5 +88,45 @@ class StreamControlScreenTest {
         }
 
         composeRule.onNodeWithText("mock-error").fetchSemanticsNode()
+    }
+
+    @Test
+    fun `非法配置时开始按钮禁用且输入会透传回调`() {
+        var lastEndpoint = ""
+        var lastSessionId = ""
+        var uiState by mutableStateOf(
+            buildStreamControlUiState(
+                config = StreamConfig(signalingEndpoint = "invalid", sessionId = ""),
+                sessionSnapshot = StreamingSessionSnapshot(),
+            ),
+        )
+
+        composeRule.setContent {
+            streamControlScreen(
+                uiState = uiState,
+                onSignalingEndpointChanged = {
+                    lastEndpoint = it
+                    uiState = uiState.copy(signalingEndpoint = it)
+                },
+                onSessionIdChanged = {
+                    lastSessionId = it
+                    uiState = uiState.copy(sessionId = it)
+                },
+                onAudioEnabledChanged = {},
+                onStartClicked = {},
+                onStopClicked = {},
+            )
+        }
+
+        composeRule.onNodeWithTag(StreamControlTestTags.START_BUTTON).assertIsNotEnabled()
+        composeRule
+            .onNodeWithTag(StreamControlTestTags.SIGNALING_ENDPOINT_INPUT)
+            .performTextInput("ws://relay.example/ws")
+        composeRule
+            .onNodeWithTag(StreamControlTestTags.SESSION_ID_INPUT)
+            .performTextInput("room-77")
+
+        assertEquals("invalidws://relay.example/ws", lastEndpoint)
+        assertEquals("room-77", lastSessionId)
     }
 }

@@ -51,7 +51,8 @@ class MainActivity : ComponentActivity() {
                 Surface(color = Color.Transparent) {
                     streamControlScreen(
                         uiState = uiState,
-                        onCodecSelected = viewModel::onCodecSelected,
+                        onSignalingEndpointChanged = viewModel::onSignalingEndpointChanged,
+                        onSessionIdChanged = viewModel::onSessionIdChanged,
                         onAudioEnabledChanged = viewModel::onAudioEnabledChanged,
                         onStartClicked = viewModel::onStartClicked,
                         onStopClicked = viewModel::onStopClicked,

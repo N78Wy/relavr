@@ -16,11 +16,14 @@ import io.relavr.sender.core.session.ProjectionAccess
 import io.relavr.sender.core.session.ProjectionPermissionGateway
 import io.relavr.sender.core.session.RtcPublishSession
 import io.relavr.sender.core.session.RtcPublisherFactory
+import io.relavr.sender.core.session.RtcSessionEvent
 import io.relavr.sender.core.session.SenderException
 import io.relavr.sender.core.session.SignalingClient
+import io.relavr.sender.core.session.SignalingMessage
+import io.relavr.sender.core.session.SignalingSession
 import io.relavr.sender.core.session.StreamingSessionController
-import io.relavr.sender.core.session.VideoCaptureSource
-import io.relavr.sender.core.session.VideoCaptureSourceFactory
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -48,30 +51,6 @@ class FakeProjectionPermissionGateway(
     }
 
     override fun restoreIfAvailable(): ProjectionAccess? = restoredAccess
-}
-
-class FakeVideoCaptureSource(
-    override val description: String = "fake-video",
-) : VideoCaptureSource {
-    var closed: Boolean = false
-
-    override fun close() {
-        closed = true
-    }
-}
-
-class FakeVideoCaptureSourceFactory(
-    private val source: FakeVideoCaptureSource = FakeVideoCaptureSource(),
-) : VideoCaptureSourceFactory {
-    var createCount: Int = 0
-
-    override suspend fun create(
-        projectionAccess: ProjectionAccess,
-        config: StreamConfig,
-    ): VideoCaptureSource {
-        createCount += 1
-        return source
-    }
 }
 
 class FakeAudioCaptureSource(
@@ -138,19 +117,65 @@ class FakeCodecPolicy : CodecPolicy {
     }
 }
 
+class FakeSignalingSession : SignalingSession {
+    private val incomingMessages = MutableSharedFlow<SignalingMessage>(extraBufferCapacity = 16)
+
+    val sentMessages = mutableListOf<SignalingMessage>()
+    var closeCount: Int = 0
+
+    override val messages: Flow<SignalingMessage> = incomingMessages
+
+    override suspend fun send(message: SignalingMessage) {
+        sentMessages += message
+    }
+
+    fun emitIncoming(message: SignalingMessage) {
+        incomingMessages.tryEmit(message)
+    }
+
+    override fun close() {
+        closeCount += 1
+    }
+}
+
+class FakeSignalingClient(
+    val session: FakeSignalingSession = FakeSignalingSession(),
+) : SignalingClient {
+    var openCount: Int = 0
+    var lastOpenedConfig: StreamConfig? = null
+
+    override suspend fun open(config: StreamConfig): SignalingSession {
+        openCount += 1
+        lastOpenedConfig = config
+        return session
+    }
+}
+
 class FakeRtcPublishSession : RtcPublishSession {
+    private val eventFlow = MutableSharedFlow<RtcSessionEvent>(extraBufferCapacity = 16)
+
     var publishCount: Int = 0
     var closed: Boolean = false
     var shouldFail: Boolean = false
+    var lastProjectionAccess: ProjectionAccess? = null
+    var lastAudioSource: AudioCaptureSource? = null
+
+    override val events: Flow<RtcSessionEvent> = eventFlow
 
     override suspend fun publish(
-        videoSource: VideoCaptureSource,
+        projectionAccess: ProjectionAccess,
         audioSource: AudioCaptureSource?,
     ) {
         if (shouldFail) {
             throw SenderException(SenderError.SessionStartFailed("fake-publish-failure"))
         }
         publishCount += 1
+        lastProjectionAccess = projectionAccess
+        lastAudioSource = audioSource
+    }
+
+    fun emitEvent(event: RtcSessionEvent) {
+        eventFlow.tryEmit(event)
     }
 
     override fun close() {
@@ -162,27 +187,15 @@ class FakeRtcPublisherFactory(
     val session: FakeRtcPublishSession = FakeRtcPublishSession(),
 ) : RtcPublisherFactory {
     var createCount: Int = 0
+    var lastSignalingSession: SignalingSession? = null
 
-    override suspend fun createSession(config: StreamConfig): RtcPublishSession {
+    override suspend fun createSession(
+        config: StreamConfig,
+        signalingSession: SignalingSession,
+    ): RtcPublishSession {
         createCount += 1
+        lastSignalingSession = signalingSession
         return session
-    }
-}
-
-class FakeSignalingClient : SignalingClient {
-    var openCount: Int = 0
-    var closeCount: Int = 0
-
-    override suspend fun open(config: StreamConfig) {
-        openCount += 1
-    }
-
-    override suspend fun closeSession() {
-        closeCount += 1
-    }
-
-    override fun close() {
-        closeCount += 1
     }
 }
 
@@ -226,7 +239,11 @@ class FakeStreamingSessionController(
     override suspend fun start(config: StreamConfig) {
         startCount += 1
         lastStartConfig = config
-        state.value = state.value.copy(resolvedConfig = config)
+        state.value =
+            state.value.copy(
+                resolvedConfig = config,
+                statusDetail = "fake-started",
+            )
     }
 
     override suspend fun stop() {
