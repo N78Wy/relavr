@@ -11,7 +11,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class NetworkSecurityPolicyTest {
     @Test
-    fun `应用已声明网络访问权限`() {
+    fun `应用已声明WebRTC所需的网络权限`() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val packageInfo =
             @Suppress("DEPRECATION")
@@ -19,6 +19,7 @@ class NetworkSecurityPolicyTest {
         val requestedPermissions = packageInfo.requestedPermissions.orEmpty()
 
         assertTrue(requestedPermissions.contains(android.Manifest.permission.INTERNET))
+        assertTrue(requestedPermissions.contains(android.Manifest.permission.ACCESS_NETWORK_STATE))
     }
 
     @Test
