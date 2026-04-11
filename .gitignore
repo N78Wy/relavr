@@ -7,4 +7,3 @@ local.properties
 captures/
 **/build/
 /.kotlin/
-**/node_modules
