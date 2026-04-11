@@ -3,6 +3,7 @@ package io.relavr.sender.platform.discovery
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.net.wifi.WifiManager
 import io.relavr.sender.core.common.AppLogger
 import io.relavr.sender.core.model.ReceiverDiscoveryPayloadCodec
 import io.relavr.sender.core.session.ReceiverDiscoveryEvent
@@ -16,6 +17,8 @@ class AndroidNsdReceiverDiscoverySource(
     private val logger: AppLogger,
 ) : ReceiverDiscoverySource {
     private val nsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
+    private val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as WifiManager
+    private var multicastLock: WifiManager.MulticastLock? = null
     private val eventFlow = MutableSharedFlow<ReceiverDiscoveryEvent>(extraBufferCapacity = 32)
     private val lock = Any()
     private val resolveListeners = mutableMapOf<String, NsdManager.ResolveListener>()
@@ -25,6 +28,7 @@ class AndroidNsdReceiverDiscoverySource(
     override val events: Flow<ReceiverDiscoveryEvent> = eventFlow
 
     override suspend fun start() {
+        acquireMulticastLock()
         while (true) {
             val waitForStop: CompletableDeferred<Unit>?
             val startRequest: StartRequest?
@@ -136,7 +140,27 @@ class AndroidNsdReceiverDiscoverySource(
             }
 
             waitForStop?.await()
+            releaseMulticastLock()
             return
+        }
+    }
+
+    private fun acquireMulticastLock() {
+        if (multicastLock == null) {
+            multicastLock = wifiManager.createMulticastLock("relavr-sender-mdns")
+        }
+        multicastLock?.let { lock ->
+            if (!lock.isHeld) {
+                lock.acquire()
+            }
+        }
+    }
+
+    private fun releaseMulticastLock() {
+        multicastLock?.let { lock ->
+            if (lock.isHeld) {
+                lock.release()
+            }
         }
     }
 
