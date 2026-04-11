@@ -21,7 +21,7 @@
 - discovery 采用 best-effort 策略，失败只展示内联错误，不阻断扫码与手动连接。
 
 ## 验收点
-- sender 能自动发现 `_relavr-recv._tcp.local` 服务，并从 TXT 字段解析展示名、Session ID 与鉴权模式。
+- sender 能自动发现 `_relavr-recv._tcp` 服务，并从 TXT 字段解析展示名、Session ID 与鉴权模式。
 - sender 点击发现结果并确认后，会自动回填 `signalingEndpoint` / `sessionId` 并复用现有开播流程。
 - receiver 离线、TXT 非法或发现失败时，不会污染当前配置，也不会影响手动填写和扫码连接。
 

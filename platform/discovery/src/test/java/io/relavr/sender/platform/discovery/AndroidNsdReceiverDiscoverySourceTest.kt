@@ -5,6 +5,11 @@ import org.junit.Test
 
 class AndroidNsdReceiverDiscoverySourceTest {
     @Test
+    fun `sender discovery 服务类型与 Android NSD 规范一致`() {
+        assertEquals("_relavr-recv._tcp", RECEIVER_DISCOVERY_SERVICE_TYPE)
+    }
+
+    @Test
     fun `TXT 字段会按 utf8 解码`() {
         val attributes =
             mapOf(
@@ -19,5 +24,11 @@ class AndroidNsdReceiverDiscoverySourceTest {
             ),
             attributes.toUtf8Map(),
         )
+    }
+
+    @Test
+    fun `错误码文案会映射内部错误`() {
+        assertEquals("系统内部错误（0）", describeDiscoveryError(0))
+        assertEquals("缺少本地网络相关权限（7）", describeDiscoveryError(7))
     }
 }

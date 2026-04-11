@@ -6,6 +6,7 @@ import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.CodecSelection
 import io.relavr.sender.core.model.DiscoveredReceiver
+import io.relavr.sender.core.model.ReceiverDiscoveryPhase
 import io.relavr.sender.core.model.ReceiverDiscoverySnapshot
 import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
@@ -310,9 +311,16 @@ class FakeReceiverDiscoveryController(
     var startCount: Int = 0
     var refreshCount: Int = 0
     var stopCount: Int = 0
+    var startSnapshot: ReceiverDiscoverySnapshot? = null
 
     override suspend fun start() {
         startCount += 1
+        state.value =
+            startSnapshot
+                ?: state.value.copy(
+                    phase = ReceiverDiscoveryPhase.Discovering,
+                    errorMessage = null,
+                )
     }
 
     override suspend fun refresh() {

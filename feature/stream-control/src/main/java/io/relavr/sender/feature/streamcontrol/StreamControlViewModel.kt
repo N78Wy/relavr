@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.DiscoveredReceiver
 import io.relavr.sender.core.model.ReceiverConnectPayloadCodec
+import io.relavr.sender.core.model.ReceiverDiscoveryPhase
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.VideoResolution
 import io.relavr.sender.core.session.ReceiverDiscoveryController
@@ -92,7 +93,8 @@ class StreamControlViewModel(
                     val shouldDiscover = active && editable
                     if (shouldDiscover && !discoveryRunning) {
                         discoveryController.start()
-                        discoveryRunning = true
+                        discoveryRunning =
+                            discoveryController.observeState().value.phase == ReceiverDiscoveryPhase.Discovering
                     } else if (!shouldDiscover && discoveryRunning) {
                         discoveryController.stop()
                         discoveryRunning = false

@@ -5,6 +5,7 @@ import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.DiscoveredReceiver
 import io.relavr.sender.core.model.ReceiverConnectPayloadCodec
 import io.relavr.sender.core.model.ReceiverConnectionInfo
+import io.relavr.sender.core.model.ReceiverDiscoveryPhase
 import io.relavr.sender.core.model.ReceiverDiscoverySnapshot
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.VideoResolution
@@ -207,6 +208,37 @@ class StreamControlViewModelTest {
 
             assertEquals(1, discoveryController.startCount)
             assertEquals(1, discoveryController.stopCount)
+        }
+
+    @Test
+    fun `发现启动失败后不会把 discovery 错误地标记为运行中`() =
+        runTest(dispatcher.scheduler) {
+            val controller = FakeStreamingSessionController()
+            val discoveryController =
+                FakeReceiverDiscoveryController().apply {
+                    startSnapshot =
+                        ReceiverDiscoverySnapshot(
+                            phase = ReceiverDiscoveryPhase.Error,
+                            errorMessage = "启动局域网发现失败：系统内部错误（0）",
+                        )
+                }
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = controller,
+                    discoveryController = discoveryController,
+                )
+
+            viewModel.onScreenStarted()
+            advanceUntilIdle()
+            viewModel.onScreenStopped()
+            advanceUntilIdle()
+
+            assertEquals(1, discoveryController.startCount)
+            assertEquals(0, discoveryController.stopCount)
+            assertEquals(
+                "启动局域网发现失败：系统内部错误（0）",
+                viewModel.uiState.value.discoveryStatusLabel,
+            )
         }
 
     @Test

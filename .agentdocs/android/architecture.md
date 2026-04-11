@@ -28,7 +28,7 @@
 - MediaProjection 会话只能由 `app` 模块内的 `mediaProjection` 类型前台服务启动与持有；`feature`、`core`、`platform` 不得直接启动前台服务或绕过该入口创建投屏会话。
 - MediaProjection 系统授权必须逐次请求，不允许跨推流会话缓存并复用上一次授权结果；相关实现只能在单次开始流程内消费授权结果。
 - sender 侧 WebRTC 建链固定走 `WebSocket + JSON Offer/Answer` 协议，消息类型只包含 `join`、`offer`、`answer`、`ice-candidate`、`leave`、`error` 六类。
-- sender 局域网发现固定镜像 `relavr-view` receiver 的 `_relavr-recv._tcp.local` mDNS 服务，TXT 字段只解析 `name`、`ver`、`sessionId`、`auth`，实际连接地址以 NSD resolve 到的 host/port 为准。
+- sender 局域网发现固定镜像 `relavr-view` receiver 的 `_relavr-recv._tcp` mDNS 服务，TXT 字段只解析 `name`、`ver`、`sessionId`、`auth`，实际连接地址以 NSD resolve 到的 host/port 为准。
 - sender 既然固定依赖 WebSocket 信令、WebRTC 网络状态监测与系统播放音频采集，`app` manifest 必须同时声明 `android.permission.INTERNET`、`android.permission.ACCESS_NETWORK_STATE` 与 `android.permission.RECORD_AUDIO`；缺少前两者会直接导致建链或网络监测失败，缺少后者则必须走视频-only 降级。
 - 发送控制台固定开放 `signalingEndpoint`、`sessionId`、编码选择、分辨率、帧率、码率与音频开关；编码和视频规格都只能在开播前修改。规格候选当前固定为 `1280x720 / 1600x900 / 1920x1080`、`24 / 30 / 45 / 60 FPS`、`2000 / 4000 / 6000 / 8000 kbps`，默认值为 `1280x720 / 30 FPS / 4000 kbps`。编码默认优先 H.264，并且只展示设备 MediaCodec 与 libwebrtc 交集后的可用编码。若用户未关闭音频，开始推流前必须先由 `app` 层预检 `RECORD_AUDIO` 运行时权限，但即使用户拒绝，也只能降级为仅视频，不能直接中断整个会话。
 - Quest 主界面必须同时提供自由窗口默认尺寸提示和 Compose 响应式布局兜底：`MainActivity` 通过 manifest `layout` 指定平板级默认宽度与最小宽度，发送控制台在 `<600dp`、`600-839dp`、`>=840dp` 三档宽度下分别切换为紧凑单列、居中单列和宽屏双列，避免 VR 设备上出现手机式窄栏布局。
