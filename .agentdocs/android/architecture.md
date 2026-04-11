@@ -25,7 +25,8 @@
 - MediaProjection 会话只能由 `app` 模块内的 `mediaProjection` 类型前台服务启动与持有；`feature`、`core`、`platform` 不得直接启动前台服务或绕过该入口创建投屏会话。
 - MediaProjection 系统授权必须逐次请求，不允许跨推流会话缓存并复用上一次授权结果；相关实现只能在单次开始流程内消费授权结果。
 - sender 侧 WebRTC 建链固定走 `WebSocket + JSON Offer/Answer` 协议，消息类型只包含 `join`、`offer`、`answer`、`ice-candidate`、`leave`、`error` 六类。
-- 首阶段 UI 只开放 `signalingEndpoint` 与 `sessionId` 输入；视频编码固定为 H.264，音频开关仅保留展示与后续扩展入口，不接入真实音轨。
+- 当前阶段所有构建默认允许明文 `ws://` 信令，用于局域网联调；后续若进入生产分发阶段，再单独收紧为 `wss://` 或分环境策略。
+- 首阶段 UI 只开放 `signalingEndpoint` 与 `sessionId` 输入；默认不预填宿主机地址，Quest 真机必须手动填写可访问的局域网 WebSocket 地址；视频编码固定为 H.264，音频开关仅保留展示与后续扩展入口，不接入真实音轨。
 
 ## 测试基线
 - 单元测试至少覆盖 codec 选择策略、发送会话状态机与 ViewModel 行为。

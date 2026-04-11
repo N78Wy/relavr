@@ -48,7 +48,7 @@ npm run answerer
 
 1. 启动信令服务器：`npm start`
 2. 启动应答端：`npm run answerer`（或指定会话 ID：`SESSION_ID=my-session npm run answerer`）
-3. 在 Quest 3 发送端输入相同的 WebSocket 地址和会话 ID
+3. 在 Quest 3 发送端输入宿主机局域网 WebSocket 地址和相同的会话 ID，例如 `ws://192.168.123.182:8765`
 4. 发送端发起推流，应答端接收视频轨道
 
 ## 示例输出
@@ -72,3 +72,5 @@ npm run answerer
 - 应答端仅接收视频轨道，不进行渲染（适合验证连通性）
 - 如需查看视频画面，可使用支持 WebRTC 的浏览器客户端
 - 会话 ID 必须在发送端和应答端保持一致
+- `ws://localhost:8765` 只适用于本机浏览器页面或本机应答端，不适用于 Quest 真机发送端
+- Quest 真机发送端应填写宿主机局域网地址，例如 `ws://192.168.123.182:8765`

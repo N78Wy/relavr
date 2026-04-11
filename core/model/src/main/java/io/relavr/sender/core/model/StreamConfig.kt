@@ -23,6 +23,9 @@ data class StreamConfig(
         if (trimmedSessionId.isEmpty()) {
             return SenderError.InvalidConfig("Session ID 不能为空")
         }
+        if (trimmedSignalingEndpoint.isEmpty()) {
+            return SenderError.InvalidConfig("WebSocket 地址不能为空")
+        }
 
         val uri =
             runCatching {
@@ -37,7 +40,7 @@ data class StreamConfig(
     }
 
     companion object {
-        const val DEFAULT_SIGNALING_ENDPOINT = "ws://10.0.2.2:8080/ws"
+        const val DEFAULT_SIGNALING_ENDPOINT = ""
         const val DEFAULT_SESSION_ID = "quest3-demo"
         const val DEFAULT_STUN_SERVER = "stun:stun.l.google.com:19302"
 

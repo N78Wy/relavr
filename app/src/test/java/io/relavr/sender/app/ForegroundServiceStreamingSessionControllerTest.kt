@@ -18,6 +18,8 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ForegroundServiceStreamingSessionControllerTest {
+    private val validConfig = StreamConfig(signalingEndpoint = "ws://192.168.123.182:8765")
+
     @Test
     fun `start 只发送前台服务命令并写入准备状态`() =
         runTest {
@@ -34,7 +36,7 @@ class ForegroundServiceStreamingSessionControllerTest {
 
             advanceUntilIdle()
 
-            val config = StreamConfig(audioEnabled = false)
+            val config = validConfig.copy(audioEnabled = false)
             controller.start(config)
 
             assertEquals(1, commandDispatcher.startCount)
@@ -55,7 +57,7 @@ class ForegroundServiceStreamingSessionControllerTest {
                         StreamingSessionSnapshot(
                             captureState = CaptureState.Capturing,
                             publishState = PublishState.Publishing,
-                            resolvedConfig = StreamConfig(),
+                            resolvedConfig = validConfig,
                         ),
                 )
             val commandDispatcher = FakeForegroundServiceCommandDispatcher()
@@ -125,7 +127,7 @@ class ForegroundServiceStreamingSessionControllerTest {
                 )
 
             advanceUntilIdle()
-            controller.start(StreamConfig())
+            controller.start(validConfig)
 
             assertEquals(CaptureState.Error, controller.observeState().value.captureState)
             assertEquals(PublishState.Error, controller.observeState().value.publishState)

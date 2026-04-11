@@ -22,6 +22,8 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class StreamControlScreenTest {
+    private val validConfig = StreamConfig(signalingEndpoint = "ws://192.168.123.182:8765")
+
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
@@ -31,7 +33,7 @@ class StreamControlScreenTest {
         var stopCount = 0
         var uiState by mutableStateOf(
             buildStreamControlUiState(
-                config = StreamConfig(),
+                config = validConfig,
                 sessionSnapshot = StreamingSessionSnapshot(),
             ),
         )
@@ -52,7 +54,7 @@ class StreamControlScreenTest {
 
         uiState =
             buildStreamControlUiState(
-                config = StreamConfig(),
+                config = validConfig,
                 sessionSnapshot =
                     StreamingSessionSnapshot(
                         captureState = CaptureState.Capturing,
@@ -71,7 +73,7 @@ class StreamControlScreenTest {
             streamControlScreen(
                 uiState =
                     buildStreamControlUiState(
-                        config = StreamConfig(),
+                        config = validConfig,
                         sessionSnapshot =
                             StreamingSessionSnapshot(
                                 error =
@@ -88,6 +90,32 @@ class StreamControlScreenTest {
         }
 
         composeRule.onNodeWithText("mock-error").fetchSemanticsNode()
+    }
+
+    @Test
+    fun `默认会显示局域网地址提示并禁用开始按钮`() {
+        composeRule.setContent {
+            streamControlScreen(
+                uiState =
+                    buildStreamControlUiState(
+                        config = StreamConfig(),
+                        sessionSnapshot = StreamingSessionSnapshot(),
+                    ),
+                onSignalingEndpointChanged = {},
+                onSessionIdChanged = {},
+                onAudioEnabledChanged = {},
+                onStartClicked = {},
+                onStopClicked = {},
+            )
+        }
+
+        composeRule.onNodeWithTag(StreamControlTestTags.START_BUTTON).assertIsNotEnabled()
+        composeRule
+            .onNodeWithText("Quest 真机请填写宿主机局域网地址，例如 ws://192.168.123.182:8765")
+            .fetchSemanticsNode()
+        composeRule
+            .onNodeWithText("请先填写 Quest 可访问的 WebSocket 地址后再开始推流")
+            .fetchSemanticsNode()
     }
 
     @Test

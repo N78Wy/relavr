@@ -159,6 +159,13 @@ private fun configCard(
             value = uiState.signalingEndpoint,
             onValueChange = onSignalingEndpointChanged,
             label = { Text("WebSocket 地址") },
+            placeholder = { Text("ws://192.168.123.182:8765") },
+            supportingText = {
+                Text(
+                    text = uiState.signalingEndpointHint,
+                    color = Color(0xFFB8D5F1),
+                )
+            },
             singleLine = true,
             enabled = uiState.configEditable,
             modifier =
@@ -270,6 +277,14 @@ private fun actionCard(
                     Text("停止")
                 }
             }
+        }
+        uiState.startHint?.let { startHint ->
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = startHint,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFFFFC1C1),
+            )
         }
     }
 }
