@@ -89,6 +89,10 @@ class MainActivity : ComponentActivity() {
                         onCodecPreferenceChanged = viewModel::onCodecPreferenceChanged,
                         onAudioEnabledChanged = viewModel::onAudioEnabledChanged,
                         onOpenScannerClicked = viewModel::onOpenScannerClicked,
+                        onDiscoveryRefreshClicked = viewModel::onDiscoveryRefreshClicked,
+                        onDiscoveredReceiverClicked = viewModel::onDiscoveredReceiverClicked,
+                        onDiscoveryConnectionDismissed = viewModel::onDiscoveryConnectionDismissed,
+                        onDiscoveryConnectionConfirmed = viewModel::onDiscoveryConnectionConfirmed,
                         onResolutionChanged = viewModel::onResolutionChanged,
                         onFpsChanged = viewModel::onFpsChanged,
                         onBitrateChanged = viewModel::onBitrateChanged,
@@ -111,6 +115,12 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         headsetCameraGranted = hasPermission(HEADSET_CAMERA_PERMISSION)
+        viewModel.onScreenStarted()
+    }
+
+    override fun onStop() {
+        viewModel.onScreenStopped()
+        super.onStop()
     }
 
     private fun hasPermission(permission: String): Boolean =

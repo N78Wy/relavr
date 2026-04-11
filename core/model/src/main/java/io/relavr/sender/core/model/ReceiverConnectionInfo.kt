@@ -15,8 +15,8 @@ data class ReceiverConnectionInfo(
         require(port in 1..65535) { "接收端端口必须在 1 到 65535 之间" }
     }
 
-    val endpoint: String = "$host:$port"
-    val webSocketUrl: String = "ws://$host:$port"
+    val endpoint: String = formatHostAndPort(host, port)
+    val webSocketUrl: String = "ws://${formatHostForUri(host)}:$port"
 
     companion object {
         const val CURRENT_PROTOCOL_VERSION = 1

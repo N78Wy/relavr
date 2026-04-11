@@ -23,6 +23,7 @@ import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.CodecSelection
+import io.relavr.sender.core.model.DiscoveredReceiver
 import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
@@ -125,6 +126,69 @@ class StreamControlScreenTest {
 
         composeRule.onNodeWithTag(StreamControlTestTags.SCAN_BUTTON).performClick()
         assertEquals(1, openScannerCount)
+    }
+
+    @Test
+    fun `发现列表会展示接收端并触发回调`() {
+        var clickedReceiver: DiscoveredReceiver? = null
+
+        setStreamControlContent(
+            uiState =
+                buildStreamControlUiState(
+                    config = validConfig(),
+                    discoveryState =
+                        io.relavr.sender.core.model.ReceiverDiscoverySnapshot(
+                            receivers =
+                                listOf(
+                                    DiscoveredReceiver(
+                                        serviceName = "living-room",
+                                        receiverName = "Living Room",
+                                        sessionId = "room-1",
+                                        host = "192.168.1.20",
+                                        port = 17888,
+                                        authRequired = true,
+                                    ),
+                                ),
+                        ),
+                    sessionSnapshot = StreamingSessionSnapshot(),
+                ),
+            onDiscoveredReceiverClicked = { clickedReceiver = it },
+        )
+
+        composeRule.onNodeWithText("局域网接收端").assertIsDisplayed()
+        composeRule.onNodeWithTag(StreamControlTestTags.discoveryReceiver("living-room")).performClick()
+        assertEquals("Living Room", clickedReceiver?.receiverName)
+    }
+
+    @Test
+    fun `发现确认弹窗按钮会触发回调`() {
+        var confirmCount = 0
+        var dismissCount = 0
+
+        setStreamControlContent(
+            uiState =
+                buildStreamControlUiState(
+                    config = validConfig(),
+                    pendingReceiver =
+                        DiscoveredReceiver(
+                            serviceName = "living-room",
+                            receiverName = "Living Room",
+                            sessionId = "room-1",
+                            host = "192.168.1.20",
+                            port = 17888,
+                            authRequired = false,
+                        ),
+                    sessionSnapshot = StreamingSessionSnapshot(),
+                ),
+            onDiscoveryConnectionDismissed = { dismissCount += 1 },
+            onDiscoveryConnectionConfirmed = { confirmCount += 1 },
+        )
+
+        composeRule.onNodeWithText("连接到 Living Room").assertIsDisplayed()
+        composeRule.onNodeWithTag(StreamControlTestTags.DISCOVERY_CONFIRM_BUTTON).performClick()
+        composeRule.onNodeWithTag(StreamControlTestTags.DISCOVERY_CANCEL_BUTTON).performClick()
+        assertEquals(1, confirmCount)
+        assertEquals(1, dismissCount)
     }
 
     @Test
@@ -326,6 +390,10 @@ class StreamControlScreenTest {
         onCodecPreferenceChanged: (CodecPreference) -> Unit = {},
         onAudioEnabledChanged: (Boolean) -> Unit = {},
         onOpenScannerClicked: () -> Unit = {},
+        onDiscoveryRefreshClicked: () -> Unit = {},
+        onDiscoveredReceiverClicked: (DiscoveredReceiver) -> Unit = {},
+        onDiscoveryConnectionDismissed: () -> Unit = {},
+        onDiscoveryConnectionConfirmed: () -> Unit = {},
         onResolutionChanged: (VideoResolution) -> Unit = {},
         onFpsChanged: (Int) -> Unit = {},
         onBitrateChanged: (Int) -> Unit = {},
@@ -341,6 +409,10 @@ class StreamControlScreenTest {
                     onCodecPreferenceChanged = onCodecPreferenceChanged,
                     onAudioEnabledChanged = onAudioEnabledChanged,
                     onOpenScannerClicked = onOpenScannerClicked,
+                    onDiscoveryRefreshClicked = onDiscoveryRefreshClicked,
+                    onDiscoveredReceiverClicked = onDiscoveredReceiverClicked,
+                    onDiscoveryConnectionDismissed = onDiscoveryConnectionDismissed,
+                    onDiscoveryConnectionConfirmed = onDiscoveryConnectionConfirmed,
                     onResolutionChanged = onResolutionChanged,
                     onFpsChanged = onFpsChanged,
                     onBitrateChanged = onBitrateChanged,

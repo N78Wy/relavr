@@ -8,6 +8,7 @@
 （暂无）
 
 ## 已完成任务文档
+`workflow/done/260411-sender-lan-discovery-connect.md` - 已为 Quest 3 sender 增加局域网 mDNS 发现、接收端选择与确认连接入口，并记录发现协议镜像、UI 交互与验证结果。
 `workflow/done/260411-sender-qr-auto-connect.md` - 已为 Quest 3 sender 增加扫码解析 receiver 二维码并自动连接的能力，记录协议镜像、Quest 相机接入与验收结果。
 `workflow/done/260411-expand-stream-options-and-adaptive-layout.md` - 已扩展发送端规格选择，修复 Quest 默认窄窗、自适应布局与低对比度文字问题，并记录验证结果。
 `workflow/done/260411-browser-preview-demo.md` - 已增加本地/局域网浏览器预览 demo，记录 Node 信令服务、浏览器 receiver 页面与验证结果。

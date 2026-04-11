@@ -3,8 +3,11 @@ package io.relavr.sender.feature.streamcontrol
 import io.relavr.sender.core.model.AudioStreamState
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.CodecPreference
+import io.relavr.sender.core.model.DiscoveredReceiver
 import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.ReceiverConnectionInfo
+import io.relavr.sender.core.model.ReceiverDiscoveryPhase
+import io.relavr.sender.core.model.ReceiverDiscoverySnapshot
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
 import io.relavr.sender.core.model.VideoResolution
@@ -24,6 +27,20 @@ data class SelectionOptionUiState<T>(
     val enabled: Boolean,
 )
 
+data class DiscoveredReceiverUiState(
+    val receiver: DiscoveredReceiver,
+    val title: String,
+    val detail: String,
+    val statusLabel: String,
+    val enabled: Boolean,
+)
+
+data class ReceiverDiscoveryConfirmationUiState(
+    val title: String,
+    val detail: String,
+    val statusLabel: String,
+)
+
 data class StreamControlUiState(
     val title: String,
     val statusLabel: String,
@@ -36,6 +53,11 @@ data class StreamControlUiState(
     val scanButtonEnabled: Boolean,
     val scannerVisible: Boolean,
     val scanStatusLabel: String,
+    val discoveryStatusLabel: String,
+    val discoveryRefreshEnabled: Boolean,
+    val discoveryReceivers: List<DiscoveredReceiverUiState>,
+    val discoveryEmptyLabel: String?,
+    val discoveryConfirmation: ReceiverDiscoveryConfirmationUiState?,
     val audioEnabled: Boolean,
     val audioToggleEnabled: Boolean,
     val audioStatusLabel: String,
@@ -51,6 +73,8 @@ data class StreamControlUiState(
 internal fun buildStreamControlUiState(
     config: StreamConfig,
     scannerState: QrScannerState = QrScannerState(),
+    discoveryState: ReceiverDiscoverySnapshot = ReceiverDiscoverySnapshot(),
+    pendingReceiver: DiscoveredReceiver? = null,
     sessionSnapshot: StreamingSessionSnapshot,
 ): StreamControlUiState {
     val capabilities = sessionSnapshot.capabilities
@@ -82,6 +106,14 @@ internal fun buildStreamControlUiState(
         scanButtonEnabled = configEditable,
         scannerVisible = scannerState.visible,
         scanStatusLabel = scannerState.toStatusLabel(),
+        discoveryStatusLabel = discoveryState.toStatusLabel(configEditable),
+        discoveryRefreshEnabled = configEditable,
+        discoveryReceivers =
+            discoveryState.receivers.map { receiver ->
+                receiver.toUiState(enabled = configEditable)
+            },
+        discoveryEmptyLabel = discoveryState.toEmptyLabel(),
+        discoveryConfirmation = pendingReceiver?.toConfirmationUiState(),
         audioEnabled = config.audioEnabled,
         audioToggleEnabled =
             configEditable &&
@@ -121,6 +153,22 @@ data class QrScannerState(
     val lastReceiver: ReceiverConnectionInfo? = null,
     val errorMessage: String? = null,
 )
+
+private fun DiscoveredReceiver.toUiState(enabled: Boolean): DiscoveredReceiverUiState =
+    DiscoveredReceiverUiState(
+        receiver = this,
+        title = receiverName,
+        detail = "地址 $endpoint · 会话 $sessionId",
+        statusLabel = if (authRequired) "接收端仍需本地确认" else "可直接发起连接",
+        enabled = enabled,
+    )
+
+private fun DiscoveredReceiver.toConfirmationUiState(): ReceiverDiscoveryConfirmationUiState =
+    ReceiverDiscoveryConfirmationUiState(
+        title = "连接到 $receiverName",
+        detail = "将使用 $endpoint 的会话 $sessionId 发起连接。",
+        statusLabel = if (authRequired) "接收端仍需本地确认。" else "确认后会立即开始当前 sender 的开播流程。",
+    )
 
 private fun <T> buildSelectionOptions(
     options: List<T>,
@@ -229,4 +277,21 @@ private fun QrScannerState.toStatusLabel(): String =
             "最近扫码：${lastReceiver.receiverName}（${lastReceiver.endpoint}），接收端仍需本地确认"
         lastReceiver != null -> "最近扫码：${lastReceiver.receiverName}（${lastReceiver.endpoint}）"
         else -> "扫描 receiver 控制台二维码后会自动回填地址并立即开播"
+    }
+
+private fun ReceiverDiscoverySnapshot.toStatusLabel(configEditable: Boolean): String =
+    when {
+        !configEditable -> "推流准备或进行中，已暂停局域网发现"
+        phase == ReceiverDiscoveryPhase.Error && errorMessage != null -> errorMessage.orEmpty()
+        receivers.isNotEmpty() -> "已发现 ${receivers.size} 个接收端，点击后可确认连接"
+        phase == ReceiverDiscoveryPhase.Discovering -> "正在扫描局域网内可用接收端"
+        else -> "进入页面后会自动扫描局域网内可用接收端"
+    }
+
+private fun ReceiverDiscoverySnapshot.toEmptyLabel(): String? =
+    when {
+        receivers.isNotEmpty() -> null
+        phase == ReceiverDiscoveryPhase.Discovering -> "暂未发现接收端，确认接收端已在同一局域网并保持等待页开启。"
+        phase == ReceiverDiscoveryPhase.Error -> "发现失败后仍可使用扫码或手动填写地址作为兜底。"
+        else -> "也可以继续扫码连接或手动填写 WebSocket 地址。"
     }

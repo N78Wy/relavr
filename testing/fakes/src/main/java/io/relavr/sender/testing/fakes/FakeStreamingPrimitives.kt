@@ -5,6 +5,8 @@ import io.relavr.sender.core.model.AudioStreamState
 import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.CodecSelection
+import io.relavr.sender.core.model.DiscoveredReceiver
+import io.relavr.sender.core.model.ReceiverDiscoverySnapshot
 import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
@@ -17,6 +19,7 @@ import io.relavr.sender.core.session.PermissionDeniedException
 import io.relavr.sender.core.session.ProjectionAccess
 import io.relavr.sender.core.session.ProjectionPermissionGateway
 import io.relavr.sender.core.session.PublishStartResult
+import io.relavr.sender.core.session.ReceiverDiscoveryController
 import io.relavr.sender.core.session.RtcPublishSession
 import io.relavr.sender.core.session.RtcPublisherFactory
 import io.relavr.sender.core.session.RtcSessionEvent
@@ -296,5 +299,37 @@ class FakeStreamingSessionController(
 
     fun updateState(snapshot: StreamingSessionSnapshot) {
         state.value = snapshot
+    }
+}
+
+class FakeReceiverDiscoveryController(
+    initialState: ReceiverDiscoverySnapshot = ReceiverDiscoverySnapshot(),
+) : ReceiverDiscoveryController {
+    private val state = MutableStateFlow(initialState)
+
+    var startCount: Int = 0
+    var refreshCount: Int = 0
+    var stopCount: Int = 0
+
+    override suspend fun start() {
+        startCount += 1
+    }
+
+    override suspend fun refresh() {
+        refreshCount += 1
+    }
+
+    override suspend fun stop() {
+        stopCount += 1
+    }
+
+    override fun observeState(): StateFlow<ReceiverDiscoverySnapshot> = state
+
+    fun updateState(snapshot: ReceiverDiscoverySnapshot) {
+        state.value = snapshot
+    }
+
+    fun updateReceivers(receivers: List<DiscoveredReceiver>) {
+        state.value = state.value.copy(receivers = receivers)
     }
 }

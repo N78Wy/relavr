@@ -4,11 +4,14 @@ import android.app.Application
 import android.media.projection.MediaProjectionManager
 import io.relavr.sender.core.common.AndroidAppLogger
 import io.relavr.sender.core.common.DefaultAppDispatchers
+import io.relavr.sender.core.session.ReceiverDiscoveryController
+import io.relavr.sender.core.session.ReceiverDiscoveryCoordinator
 import io.relavr.sender.core.session.StreamingSessionController
 import io.relavr.sender.core.session.StreamingSessionCoordinator
 import io.relavr.sender.feature.streamcontrol.StreamControlViewModelFactory
 import io.relavr.sender.platform.androidcapture.AndroidProjectionPermissionGateway
 import io.relavr.sender.platform.androidcapture.PlaybackAudioCaptureSourceFactory
+import io.relavr.sender.platform.discovery.AndroidNsdReceiverDiscoverySource
 import io.relavr.sender.platform.mediacodec.AndroidMediaCodecCapabilityRepository
 import io.relavr.sender.platform.mediacodec.DefaultCodecPolicy
 import io.relavr.sender.platform.webrtc.DefaultWebRtcCodecSupportProvider
@@ -47,6 +50,13 @@ class AppContainer(
     private val foregroundServiceCommandDispatcher =
         AndroidForegroundServiceCommandDispatcher(application)
 
+    private val receiverDiscoveryController: ReceiverDiscoveryController =
+        ReceiverDiscoveryCoordinator(
+            source = AndroidNsdReceiverDiscoverySource(application, AndroidAppLogger),
+            dispatchers = DefaultAppDispatchers,
+            logger = AndroidAppLogger,
+        )
+
     private val sessionController: StreamingSessionController =
         ForegroundServiceStreamingSessionController(
             sessionEngine = sessionEngine,
@@ -56,5 +66,9 @@ class AppContainer(
             logger = AndroidAppLogger,
         )
 
-    val streamControlViewModelFactory = StreamControlViewModelFactory(sessionController)
+    val streamControlViewModelFactory =
+        StreamControlViewModelFactory(
+            sessionController = sessionController,
+            discoveryController = receiverDiscoveryController,
+        )
 }

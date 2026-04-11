@@ -2,10 +2,13 @@ package io.relavr.sender.feature.streamcontrol
 
 import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CodecPreference
+import io.relavr.sender.core.model.DiscoveredReceiver
 import io.relavr.sender.core.model.ReceiverConnectPayloadCodec
 import io.relavr.sender.core.model.ReceiverConnectionInfo
+import io.relavr.sender.core.model.ReceiverDiscoverySnapshot
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.VideoResolution
+import io.relavr.sender.testing.fakes.FakeReceiverDiscoveryController
 import io.relavr.sender.testing.fakes.FakeStreamingSessionController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -39,7 +42,11 @@ class StreamControlViewModelTest {
     fun `初始化后加载能力并更新配置`() =
         runTest(dispatcher.scheduler) {
             val controller = FakeStreamingSessionController()
-            val viewModel = StreamControlViewModel(sessionController = controller)
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = controller,
+                    discoveryController = FakeReceiverDiscoveryController(),
+                )
 
             advanceUntilIdle()
 
@@ -62,7 +69,11 @@ class StreamControlViewModelTest {
     fun `开始推流前会带上用户填写的信令配置`() =
         runTest(dispatcher.scheduler) {
             val controller = FakeStreamingSessionController()
-            val viewModel = StreamControlViewModel(sessionController = controller)
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = controller,
+                    discoveryController = FakeReceiverDiscoveryController(),
+                )
 
             viewModel.onSignalingEndpointChanged("wss://signal.example/ws")
             viewModel.onSessionIdChanged("room-42")
@@ -90,7 +101,11 @@ class StreamControlViewModelTest {
     fun `扫码成功后会自动回填连接信息并立即开始推流`() =
         runTest(dispatcher.scheduler) {
             val controller = FakeStreamingSessionController()
-            val viewModel = StreamControlViewModel(sessionController = controller)
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = controller,
+                    discoveryController = FakeReceiverDiscoveryController(),
+                )
             val payload =
                 ReceiverConnectPayloadCodec.encode(
                     ReceiverConnectionInfo(
@@ -128,7 +143,11 @@ class StreamControlViewModelTest {
     fun `非法二维码不会污染配置也不会触发开播`() =
         runTest(dispatcher.scheduler) {
             val controller = FakeStreamingSessionController()
-            val viewModel = StreamControlViewModel(sessionController = controller)
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = controller,
+                    discoveryController = FakeReceiverDiscoveryController(),
+                )
 
             viewModel.onSignalingEndpointChanged("ws://keep.example/ws")
             viewModel.onSessionIdChanged("keep-room")
@@ -159,6 +178,7 @@ class StreamControlViewModelTest {
             val viewModel =
                 StreamControlViewModel(
                     sessionController = controller,
+                    discoveryController = FakeReceiverDiscoveryController(),
                     initialConfig = StreamConfig(codecPreference = CodecPreference.VP9),
                 )
 
@@ -167,5 +187,118 @@ class StreamControlViewModelTest {
             val state = viewModel.uiState.value
             assertEquals(CodecPreference.HEVC, state.codecOptions.single { it.selected }.preference)
             assertEquals("当前选择为设备推荐默认：H.265 / HEVC", state.codecStatusLabel)
+        }
+
+    @Test
+    fun `页面可见且配置可编辑时会自动启动发现，离开页面后会停止`() =
+        runTest(dispatcher.scheduler) {
+            val controller = FakeStreamingSessionController()
+            val discoveryController = FakeReceiverDiscoveryController()
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = controller,
+                    discoveryController = discoveryController,
+                )
+
+            viewModel.onScreenStarted()
+            advanceUntilIdle()
+            viewModel.onScreenStopped()
+            advanceUntilIdle()
+
+            assertEquals(1, discoveryController.startCount)
+            assertEquals(1, discoveryController.stopCount)
+        }
+
+    @Test
+    fun `发现到接收端后点击确认才会开始推流`() =
+        runTest(dispatcher.scheduler) {
+            val controller = FakeStreamingSessionController()
+            val discoveryController =
+                FakeReceiverDiscoveryController(
+                    ReceiverDiscoverySnapshot(
+                        receivers =
+                            listOf(
+                                DiscoveredReceiver(
+                                    serviceName = "living-room",
+                                    receiverName = "Living Room",
+                                    sessionId = "room-1",
+                                    host = "192.168.1.20",
+                                    port = 17888,
+                                    authRequired = true,
+                                ),
+                            ),
+                    ),
+                )
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = controller,
+                    discoveryController = discoveryController,
+                )
+            val receiver =
+                discoveryController
+                    .observeState()
+                    .value.receivers
+                    .single()
+
+            viewModel.onDiscoveredReceiverClicked(receiver)
+            advanceUntilIdle()
+
+            assertEquals(0, controller.startCount)
+            assertEquals(
+                "连接到 Living Room",
+                viewModel.uiState.value.discoveryConfirmation
+                    ?.title,
+            )
+
+            viewModel.onDiscoveryConnectionConfirmed()
+            advanceUntilIdle()
+
+            assertEquals(1, controller.startCount)
+            assertEquals("ws://192.168.1.20:17888", controller.lastStartConfig?.signalingEndpoint)
+            assertEquals("room-1", controller.lastStartConfig?.sessionId)
+        }
+
+    @Test
+    fun `取消发现连接不会污染配置也不会触发开播`() =
+        runTest(dispatcher.scheduler) {
+            val controller = FakeStreamingSessionController()
+            val discoveryController =
+                FakeReceiverDiscoveryController(
+                    ReceiverDiscoverySnapshot(
+                        receivers =
+                            listOf(
+                                DiscoveredReceiver(
+                                    serviceName = "living-room",
+                                    receiverName = "Living Room",
+                                    sessionId = "room-1",
+                                    host = "192.168.1.20",
+                                    port = 17888,
+                                    authRequired = false,
+                                ),
+                            ),
+                    ),
+                )
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = controller,
+                    discoveryController = discoveryController,
+                )
+
+            viewModel.onSignalingEndpointChanged("ws://keep.example/ws")
+            viewModel.onSessionIdChanged("keep-room")
+            viewModel.onDiscoveredReceiverClicked(
+                discoveryController
+                    .observeState()
+                    .value.receivers
+                    .single(),
+            )
+            advanceUntilIdle()
+            viewModel.onDiscoveryConnectionDismissed()
+            advanceUntilIdle()
+
+            assertEquals(0, controller.startCount)
+            assertEquals("ws://keep.example/ws", viewModel.uiState.value.signalingEndpoint)
+            assertEquals("keep-room", viewModel.uiState.value.sessionId)
+            assertEquals(null, viewModel.uiState.value.discoveryConfirmation)
         }
 }
