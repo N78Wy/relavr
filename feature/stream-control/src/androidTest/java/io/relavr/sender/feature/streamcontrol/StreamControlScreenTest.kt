@@ -39,7 +39,7 @@ class StreamControlScreenTest {
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
-    fun `start and stop buttons trigger the matching callbacks`() {
+    fun start_and_stop_buttons_trigger_the_matching_callbacks() {
         var startCount = 0
         var stopCount = 0
         var uiState by mutableStateOf(
@@ -74,7 +74,7 @@ class StreamControlScreenTest {
     }
 
     @Test
-    fun `error messages are shown on screen`() {
+    fun error_messages_are_shown_on_screen() {
         setStreamControlContent(
             uiState =
                 buildStreamControlUiState(
@@ -92,7 +92,7 @@ class StreamControlScreenTest {
     }
 
     @Test
-    fun `the quest3 lan endpoint hint is displayed`() {
+    fun quest3_lan_endpoint_hint_is_displayed() {
         setStreamControlContent(
             uiState =
                 buildStreamControlUiState(
@@ -103,18 +103,18 @@ class StreamControlScreenTest {
 
         composeRule
             .onNodeWithText(
-                "On a Quest 3 device, use the development machine LAN address such as ws://192.168.1.20:8080/ws. Use 10.0.2.2 only on the Android emulator.",
+                "Use ws://192.168.1.20:8080/ws for a LAN receiver app, or wss://signal.example/ws for a deployed browser preview. Use 10.0.2.2 only on the Android emulator.",
             ).assertIsDisplayed()
-        composeRule.onNodeWithText("Example: ws://192.168.1.20:8080/ws").assertIsDisplayed()
+        composeRule.onNodeWithText("Example: ws://192.168.1.20:8080/ws or wss://signal.example/ws").assertIsDisplayed()
         composeRule.onNodeWithTag(StreamControlTestTags.SCAN_BUTTON).assertIsDisplayed()
         composeRule
             .onNodeWithText(
-                "Scan the receiver console QR code to autofill the endpoint and start streaming immediately.",
+                "Scan the receiver QR code to autofill the exact ws:// or wss:// endpoint and start streaming immediately.",
             ).assertIsDisplayed()
     }
 
     @Test
-    fun `the scan button triggers its callback`() {
+    fun scan_button_triggers_its_callback() {
         var openScannerCount = 0
 
         setStreamControlContent(
@@ -131,7 +131,7 @@ class StreamControlScreenTest {
     }
 
     @Test
-    fun `the scan status shows the most recent receiver result`() {
+    fun scan_status_shows_the_most_recent_receiver_result() {
         setStreamControlContent(
             uiState =
                 buildStreamControlUiState(
@@ -142,9 +142,11 @@ class StreamControlScreenTest {
                                 io.relavr.sender.core.model.ReceiverConnectionInfo(
                                     receiverName = "Living Room",
                                     sessionId = "demo",
-                                    host = "192.168.1.20",
-                                    port = 17888,
+                                    host = "preview.relavr.example",
+                                    port = 443,
                                     authRequired = true,
+                                    scheme = "wss",
+                                    path = "/ws",
                                 ),
                         ),
                     sessionSnapshot = StreamingSessionSnapshot(),
@@ -152,12 +154,12 @@ class StreamControlScreenTest {
         )
 
         composeRule
-            .onNodeWithText("Last scan: Living Room (192.168.1.20:17888). The receiver still requires local confirmation.")
+            .onNodeWithText("Last scan: Living Room (wss://preview.relavr.example:443/ws). The receiver still requires local confirmation.")
             .assertIsDisplayed()
     }
 
     @Test
-    fun `invalid config disables start while inputs still forward callbacks`() {
+    fun invalid_config_disables_start_while_inputs_still_forward_callbacks() {
         var lastEndpoint = ""
         var lastSessionId = ""
         var uiState by mutableStateOf(
@@ -188,7 +190,7 @@ class StreamControlScreenTest {
     }
 
     @Test
-    fun `the audio toggle works and shows degradation hints`() {
+    fun audio_toggle_works_and_shows_degradation_hints() {
         var audioEnabled = true
 
         setStreamControlContent(
@@ -210,7 +212,23 @@ class StreamControlScreenTest {
     }
 
     @Test
-    fun `codec options are switchable and unsupported ones stay disabled`() {
+    fun pending_audio_permission_disables_the_audio_toggle_and_start_button() {
+        setStreamControlContent(
+            uiState =
+                buildStreamControlUiState(
+                    config = validConfig(),
+                    sessionSnapshot = StreamingSessionSnapshot(),
+                    audioPermissionRequestPending = true,
+                ),
+        )
+
+        composeRule.onNodeWithText("Permission requested. Complete the system dialog to continue.").assertIsDisplayed()
+        composeRule.onNodeWithTag(StreamControlTestTags.AUDIO_SWITCH).assertIsNotEnabled()
+        composeRule.onNodeWithTag(StreamControlTestTags.START_BUTTON).assertIsNotEnabled()
+    }
+
+    @Test
+    fun codec_options_are_switchable_and_unsupported_ones_stay_disabled() {
         var selectedCodec = CodecPreference.H264
 
         setStreamControlContent(
@@ -240,7 +258,7 @@ class StreamControlScreenTest {
     }
 
     @Test
-    fun `codec fallback shows the requested and resolved codec`() {
+    fun codec_fallback_shows_the_requested_and_resolved_codec() {
         setStreamControlContent(
             uiState =
                 buildStreamControlUiState(
@@ -265,7 +283,7 @@ class StreamControlScreenTest {
     }
 
     @Test
-    fun `profile options are switchable and callbacks receive user selections`() {
+    fun profile_options_are_switchable_and_callbacks_receive_user_selections() {
         var selectedResolution = StreamConfig.DEFAULT_RESOLUTION
         var selectedFps = StreamConfig.DEFAULT_FPS
         var selectedBitrate = StreamConfig.DEFAULT_BITRATE_KBPS
@@ -291,7 +309,7 @@ class StreamControlScreenTest {
     }
 
     @Test
-    fun `the profile card and action buttons remain visible at narrow widths`() {
+    fun profile_card_and_action_buttons_remain_visible_at_narrow_widths() {
         setStreamControlContent(
             uiState =
                 buildStreamControlUiState(

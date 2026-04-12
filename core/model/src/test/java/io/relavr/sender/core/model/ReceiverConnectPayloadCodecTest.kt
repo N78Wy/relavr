@@ -10,43 +10,52 @@ class ReceiverConnectPayloadCodecTest {
             ReceiverConnectionInfo(
                 receiverName = "Living Room",
                 sessionId = "quest3-demo",
-                host = "192.168.0.10",
-                port = 17888,
+                host = "preview.relavr.example",
+                port = 443,
                 authRequired = true,
+                scheme = "wss",
+                path = "/ws",
             )
 
         val encoded = ReceiverConnectPayloadCodec.encode(original)
         val decoded = ReceiverConnectPayloadCodec.decode(encoded)
 
         assertEquals(original, decoded)
-        assertEquals("ws://192.168.0.10:17888", decoded.webSocketUrl)
+        assertEquals("wss://preview.relavr.example:443/ws", decoded.webSocketUrl)
     }
 
     @Test(expected = IllegalArgumentException::class)
     fun `unknown payload types throw`() {
         ReceiverConnectPayloadCodec.decode(
-            """{"type":"unknown","ver":1,"name":"TV","sessionId":"demo","host":"127.0.0.1","port":17888,"auth":"pin"}""",
+            """{"type":"unknown","ver":2,"name":"TV","sessionId":"demo","scheme":"ws","host":"127.0.0.1","port":17888,"path":"/","auth":"pin"}""",
         )
     }
 
     @Test(expected = IllegalArgumentException::class)
     fun `unsupported protocol versions throw`() {
         ReceiverConnectPayloadCodec.decode(
-            """{"type":"receiver-connect","ver":2,"name":"TV","sessionId":"demo","host":"127.0.0.1","port":17888,"auth":"pin"}""",
+            """{"type":"receiver-connect","ver":1,"name":"TV","sessionId":"demo","scheme":"ws","host":"127.0.0.1","port":17888,"path":"/","auth":"pin"}""",
         )
     }
 
     @Test(expected = IllegalArgumentException::class)
     fun `missing hosts throw`() {
         ReceiverConnectPayloadCodec.decode(
-            """{"type":"receiver-connect","ver":1,"name":"TV","sessionId":"demo","host":"","port":17888,"auth":"pin"}""",
+            """{"type":"receiver-connect","ver":2,"name":"TV","sessionId":"demo","scheme":"ws","host":"","port":17888,"path":"/","auth":"pin"}""",
         )
     }
 
     @Test(expected = IllegalArgumentException::class)
     fun `invalid ports throw`() {
         ReceiverConnectPayloadCodec.decode(
-            """{"type":"receiver-connect","ver":1,"name":"TV","sessionId":"demo","host":"127.0.0.1","port":70000,"auth":"pin"}""",
+            """{"type":"receiver-connect","ver":2,"name":"TV","sessionId":"demo","scheme":"ws","host":"127.0.0.1","port":70000,"path":"/","auth":"pin"}""",
+        )
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `invalid paths throw`() {
+        ReceiverConnectPayloadCodec.decode(
+            """{"type":"receiver-connect","ver":2,"name":"TV","sessionId":"demo","scheme":"wss","host":"preview.relavr.example","port":443,"path":"ws","auth":"none"}""",
         )
     }
 

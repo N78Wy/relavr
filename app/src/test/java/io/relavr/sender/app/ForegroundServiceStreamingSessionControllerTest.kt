@@ -160,10 +160,11 @@ class ForegroundServiceStreamingSessionControllerTest {
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val recordAudioPermissionGateway = FakeRecordAudioPermissionGateway()
+            val commandDispatcher = FakeForegroundServiceCommandDispatcher()
             val controller =
                 ForegroundServiceStreamingSessionController(
                     sessionEngine = FakeStreamingSessionController(),
-                    commandDispatcher = FakeForegroundServiceCommandDispatcher(),
+                    commandDispatcher = commandDispatcher,
                     recordAudioPermissionGateway = recordAudioPermissionGateway,
                     dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
                     logger = FakeAppLogger(),
@@ -178,6 +179,37 @@ class ForegroundServiceStreamingSessionControllerTest {
             )
 
             assertEquals(1, recordAudioPermissionGateway.requestCount)
+            assertEquals(true, commandDispatcher.lastStartConfig?.audioEnabled)
+        }
+
+    @Test
+    fun `record-audio permission denial downgrades the service start config to video-only`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val recordAudioPermissionGateway =
+                FakeRecordAudioPermissionGateway().also {
+                    it.nextGranted = false
+                }
+            val commandDispatcher = FakeForegroundServiceCommandDispatcher()
+            val controller =
+                ForegroundServiceStreamingSessionController(
+                    sessionEngine = FakeStreamingSessionController(),
+                    commandDispatcher = commandDispatcher,
+                    recordAudioPermissionGateway = recordAudioPermissionGateway,
+                    dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
+                    logger = FakeAppLogger(),
+                )
+
+            advanceUntilIdle()
+            controller.start(
+                StreamConfig(
+                    audioEnabled = true,
+                    signalingEndpoint = VALID_SIGNALING_ENDPOINT,
+                ),
+            )
+
+            assertEquals(1, recordAudioPermissionGateway.requestCount)
+            assertEquals(false, commandDispatcher.lastStartConfig?.audioEnabled)
         }
 
     private companion object {

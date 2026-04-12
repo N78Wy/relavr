@@ -14,7 +14,7 @@ class MainActivitySmokeTest {
     val composeRule = createAndroidComposeRule<MainActivity>()
 
     @Test
-    fun `the main screen shows the start streaming button after launch`() {
+    fun main_screen_shows_the_start_streaming_button_after_launch() {
         composeRule.onNodeWithTag(StreamControlTestTags.START_BUTTON).fetchSemanticsNode()
     }
 }

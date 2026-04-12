@@ -8,8 +8,10 @@ object ReceiverConnectPayloadCodec {
                 VERSION_KEY to info.protocolVersion,
                 NAME_KEY to info.receiverName,
                 SESSION_ID_KEY to info.sessionId,
+                SCHEME_KEY to info.scheme,
                 HOST_KEY to info.host,
                 PORT_KEY to info.port,
+                PATH_KEY to info.path,
                 AUTH_KEY to if (info.authRequired) AUTH_PIN else AUTH_NONE,
             ),
         )
@@ -36,8 +38,10 @@ object ReceiverConnectPayloadCodec {
         return ReceiverConnectionInfo(
             receiverName = fields.requireJsonString(NAME_KEY),
             sessionId = fields.requireJsonString(SESSION_ID_KEY),
+            scheme = fields.requireJsonString(SCHEME_KEY),
             host = fields.requireJsonString(HOST_KEY),
             port = fields.requireJsonInt(PORT_KEY),
+            path = fields.requireJsonString(PATH_KEY),
             authRequired = authRequired,
             protocolVersion = protocolVersion,
         )
@@ -48,8 +52,10 @@ object ReceiverConnectPayloadCodec {
     private const val VERSION_KEY = "ver"
     private const val NAME_KEY = "name"
     private const val SESSION_ID_KEY = "sessionId"
+    private const val SCHEME_KEY = "scheme"
     private const val HOST_KEY = "host"
     private const val PORT_KEY = "port"
+    private const val PATH_KEY = "path"
     private const val AUTH_KEY = "auth"
     private const val AUTH_PIN = "pin"
     private const val AUTH_NONE = "none"

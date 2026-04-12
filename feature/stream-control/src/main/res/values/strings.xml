@@ -28,7 +28,7 @@
     <string name="stream_control_scan_error">QR scan failed.</string>
     <string name="stream_control_scan_recent_requires_confirmation">Last scan: %1$s (%2$s). The receiver still requires local confirmation.</string>
     <string name="stream_control_scan_recent">Last scan: %1$s (%2$s).</string>
-    <string name="stream_control_scan_default">Scan the receiver console QR code to autofill the endpoint and start streaming immediately.</string>
+    <string name="stream_control_scan_default">Scan the receiver QR code to autofill the exact ws:// or wss:// endpoint and start streaming immediately.</string>
     <string name="stream_control_scan_parse_failed">The receiver QR code could not be parsed.</string>
     <string name="stream_control_scan_camera_permission_denied">The headset camera permission was denied, so scanning was cancelled.</string>
     <string name="stream_control_language_label">Language</string>
@@ -37,8 +37,8 @@
     <string name="stream_control_config_title">Streaming Configuration</string>
     <string name="stream_control_codec_title">Video Codec</string>
     <string name="stream_control_endpoint_label">WebSocket Endpoint</string>
-    <string name="stream_control_endpoint_placeholder">Example: ws://192.168.1.20:8080/ws</string>
-    <string name="stream_control_endpoint_hint">On a Quest 3 device, use the development machine LAN address such as ws://192.168.1.20:8080/ws. Use 10.0.2.2 only on the Android emulator.</string>
+    <string name="stream_control_endpoint_placeholder">Example: ws://192.168.1.20:8080/ws or wss://signal.example/ws</string>
+    <string name="stream_control_endpoint_hint">Use ws://192.168.1.20:8080/ws for a LAN receiver app, or wss://signal.example/ws for a deployed browser preview. Use 10.0.2.2 only on the Android emulator.</string>
     <string name="stream_control_scan_button">Scan Receiver QR Code</string>
     <string name="stream_control_session_id_label">Session ID</string>
     <string name="stream_control_ice_hint">Google STUN is used by default. TURN and authentication can be added later.</string>

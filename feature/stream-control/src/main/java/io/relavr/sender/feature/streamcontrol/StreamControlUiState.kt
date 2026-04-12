@@ -38,6 +38,7 @@ data class StreamControlUiState(
     val scannerVisible: Boolean,
     val scanStatusLabel: UiText,
     val audioEnabled: Boolean,
+    val audioPermissionRequestPending: Boolean,
     val audioToggleEnabled: Boolean,
     val audioStatusLabel: UiText,
     val streamProfileSummary: UiText,
@@ -53,6 +54,7 @@ internal fun buildStreamControlUiState(
     config: StreamConfig,
     scannerState: QrScannerState = QrScannerState(),
     sessionSnapshot: StreamingSessionSnapshot,
+    audioPermissionRequestPending: Boolean = false,
 ): StreamControlUiState {
     val capabilities = sessionSnapshot.capabilities
     val configEditable =
@@ -84,10 +86,12 @@ internal fun buildStreamControlUiState(
         scannerVisible = scannerState.visible,
         scanStatusLabel = scannerState.toStatusLabel(),
         audioEnabled = config.audioEnabled,
+        audioPermissionRequestPending = audioPermissionRequestPending,
         audioToggleEnabled =
             configEditable &&
-                capabilities?.audioPlaybackCaptureSupported != false,
-        audioStatusLabel = sessionSnapshot.toAudioStatusLabel(config),
+                capabilities?.audioPlaybackCaptureSupported != false &&
+                !audioPermissionRequestPending,
+        audioStatusLabel = sessionSnapshot.toAudioStatusLabel(config, audioPermissionRequestPending),
         streamProfileSummary =
             UiText.of(
                 R.string.stream_control_profile_summary,
@@ -113,7 +117,7 @@ internal fun buildStreamControlUiState(
                 selectedValue = config.bitrateKbps,
                 enabled = configEditable,
             ) { option -> "$option kbps" },
-        startEnabled = configValid && configEditable,
+        startEnabled = configValid && configEditable && !audioPermissionRequestPending,
         stopEnabled =
             hasActiveSession &&
                 sessionSnapshot.captureState != CaptureState.Stopping &&
@@ -175,8 +179,13 @@ private fun StreamingSessionSnapshot.toStatusDescription(config: StreamConfig): 
     }
 }
 
-private fun StreamingSessionSnapshot.toAudioStatusLabel(config: StreamConfig): UiText =
+private fun StreamingSessionSnapshot.toAudioStatusLabel(
+    config: StreamConfig,
+    audioPermissionRequestPending: Boolean,
+): UiText =
     when {
+        audioPermissionRequestPending ->
+            UiText.of(io.relavr.sender.core.model.R.string.sender_status_permission_requested)
         capabilities?.audioPlaybackCaptureSupported == false -> UiText.of(R.string.stream_control_audio_unsupported)
         !config.audioEnabled -> UiText.of(R.string.stream_control_audio_disabled)
         audioState == AudioStreamState.Starting -> UiText.of(R.string.stream_control_audio_starting)
@@ -255,8 +264,8 @@ private fun QrScannerState.toStatusLabel(): UiText =
             UiText.of(
                 R.string.stream_control_scan_recent_requires_confirmation,
                 lastReceiver.receiverName,
-                lastReceiver.endpoint,
+                lastReceiver.webSocketUrl,
             )
-        lastReceiver != null -> UiText.of(R.string.stream_control_scan_recent, lastReceiver.receiverName, lastReceiver.endpoint)
+        lastReceiver != null -> UiText.of(R.string.stream_control_scan_recent, lastReceiver.receiverName, lastReceiver.webSocketUrl)
         else -> UiText.of(R.string.stream_control_scan_default)
     }

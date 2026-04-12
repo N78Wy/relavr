@@ -10,6 +10,7 @@ import io.relavr.sender.testing.fakes.FakeStreamingSessionController
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -121,7 +122,7 @@ class StreamControlViewModelTest {
             viewModel.onResolutionChanged(VideoResolution(width = 1920, height = 1080))
             viewModel.onFpsChanged(60)
             viewModel.onBitrateChanged(8000)
-            viewModel.onAudioEnabledChanged(false)
+            viewModel.onAudioToggleRequested(false)
             advanceUntilIdle()
 
             assertEquals(
@@ -182,9 +183,11 @@ class StreamControlViewModelTest {
                     ReceiverConnectionInfo(
                         receiverName = "Living Room",
                         sessionId = "receiver-room",
-                        host = "192.168.50.20",
-                        port = 17888,
+                        host = "preview.relavr.example",
+                        port = 443,
                         authRequired = true,
+                        scheme = "wss",
+                        path = "/ws",
                     ),
                 )
 
@@ -192,19 +195,19 @@ class StreamControlViewModelTest {
             viewModel.onResolutionChanged(VideoResolution(width = 1920, height = 1080))
             viewModel.onFpsChanged(60)
             viewModel.onBitrateChanged(8000)
-            viewModel.onAudioEnabledChanged(false)
+            viewModel.onAudioToggleRequested(false)
             viewModel.onScannerPayloadReceived(payload)
             advanceUntilIdle()
 
             assertEquals(1, controller.startCount)
-            assertEquals("ws://192.168.50.20:17888", controller.lastStartConfig?.signalingEndpoint)
+            assertEquals("wss://preview.relavr.example:443/ws", controller.lastStartConfig?.signalingEndpoint)
             assertEquals("receiver-room", controller.lastStartConfig?.sessionId)
             assertEquals(CodecPreference.HEVC, controller.lastStartConfig?.codecPreference)
             assertEquals(VideoResolution(width = 1920, height = 1080), controller.lastStartConfig?.resolution)
             assertEquals(60, controller.lastStartConfig?.fps)
             assertEquals(8000, controller.lastStartConfig?.bitrateKbps)
             assertFalse(controller.lastStartConfig?.audioEnabled ?: true)
-            assertEquals("ws://192.168.50.20:17888", configStore.storedConfig.signalingEndpoint)
+            assertEquals("wss://preview.relavr.example:443/ws", configStore.storedConfig.signalingEndpoint)
             assertEquals("receiver-room", configStore.storedConfig.sessionId)
             assertTrue(
                 viewModel.uiState.value.scanStatusLabel.args
@@ -268,6 +271,105 @@ class StreamControlViewModelTest {
             assertEquals(CodecPreference.HEVC, configStore.storedConfig.codecPreference)
         }
 
+    @Test
+    fun `audio enabled config auto-requests permission after an explicit denied snapshot`() =
+        runTest(dispatcher.scheduler) {
+            val controller = FakeStreamingSessionController()
+            val loadGate = CompletableDeferred<Unit>()
+            val configStore =
+                FakeStreamControlConfigStore(
+                    initialConfig = StreamConfig(signalingEndpoint = VALID_SIGNALING_ENDPOINT),
+                    loadGate = loadGate,
+                )
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = controller,
+                    configStore = configStore,
+                )
+            val permissionRequests = mutableListOf<Unit>()
+
+            backgroundScope.launch(dispatcher) {
+                viewModel.recordAudioPermissionRequests.collect { permissionRequests += Unit }
+            }
+            advanceUntilIdle()
+
+            viewModel.onRecordAudioPermissionSnapshot(false)
+            advanceUntilIdle()
+            assertEquals(0, permissionRequests.size)
+
+            loadGate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals(1, permissionRequests.size)
+            assertTrue(viewModel.uiState.value.audioPermissionRequestPending)
+            assertFalse(viewModel.uiState.value.startEnabled)
+        }
+
+    @Test
+    fun `denied record permission turns audio off and the next manual enable retries`() =
+        runTest(dispatcher.scheduler) {
+            val configStore =
+                FakeStreamControlConfigStore(
+                    initialConfig = StreamConfig(signalingEndpoint = VALID_SIGNALING_ENDPOINT),
+                )
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = FakeStreamingSessionController(),
+                    configStore = configStore,
+                )
+            advanceUntilIdle()
+
+            viewModel.onRecordAudioPermissionSnapshot(false)
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.audioPermissionRequestPending)
+
+            viewModel.onRecordAudioPermissionResolved(false)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.audioEnabled)
+            assertFalse(viewModel.uiState.value.audioPermissionRequestPending)
+            assertFalse(configStore.storedConfig.audioEnabled)
+
+            viewModel.onAudioToggleRequested(true)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.audioPermissionRequestPending)
+        }
+
+    @Test
+    fun `manual audio enable with granted permission persists without requesting again`() =
+        runTest(dispatcher.scheduler) {
+            val configStore =
+                FakeStreamControlConfigStore(
+                    initialConfig =
+                        StreamConfig(
+                            signalingEndpoint = VALID_SIGNALING_ENDPOINT,
+                            audioEnabled = false,
+                        ),
+                )
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = FakeStreamingSessionController(),
+                    configStore = configStore,
+                )
+            val permissionRequests = mutableListOf<Unit>()
+
+            backgroundScope.launch(dispatcher) {
+                viewModel.recordAudioPermissionRequests.collect { permissionRequests += Unit }
+            }
+            advanceUntilIdle()
+
+            viewModel.onRecordAudioPermissionSnapshot(true)
+            advanceUntilIdle()
+
+            viewModel.onAudioToggleRequested(true)
+            advanceUntilIdle()
+
+            assertEquals(0, permissionRequests.size)
+            assertTrue(viewModel.uiState.value.audioEnabled)
+            assertTrue(configStore.storedConfig.audioEnabled)
+        }
+
     private class FakeStreamControlConfigStore(
         initialConfig: StreamConfig = StreamConfig(),
         private val loadGate: CompletableDeferred<Unit>? = null,
@@ -283,5 +385,9 @@ class StreamControlViewModelTest {
         override suspend fun save(config: StreamConfig) {
             storedConfig = config
         }
+    }
+
+    private companion object {
+        const val VALID_SIGNALING_ENDPOINT = "ws://192.168.1.20:8080/ws"
     }
 }

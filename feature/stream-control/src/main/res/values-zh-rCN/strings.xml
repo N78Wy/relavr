@@ -28,7 +28,7 @@
     <string name="stream_control_scan_error">扫码失败。</string>
     <string name="stream_control_scan_recent_requires_confirmation">最近扫码：%1$s（%2$s），接收端仍需本地确认。</string>
     <string name="stream_control_scan_recent">最近扫码：%1$s（%2$s）。</string>
-    <string name="stream_control_scan_default">扫描 receiver 控制台二维码后会自动回填地址并立即开播。</string>
+    <string name="stream_control_scan_default">扫描 receiver 二维码后会自动回填准确的 ws:// 或 wss:// 地址并立即开播。</string>
     <string name="stream_control_scan_parse_failed">二维码解析失败。</string>
     <string name="stream_control_scan_camera_permission_denied">未授予头显相机权限，已取消扫码。</string>
     <string name="stream_control_language_label">语言</string>
@@ -37,8 +37,8 @@
     <string name="stream_control_config_title">发送配置</string>
     <string name="stream_control_codec_title">视频编码</string>
     <string name="stream_control_endpoint_label">WebSocket 地址</string>
-    <string name="stream_control_endpoint_placeholder">例如 ws://192.168.1.20:8080/ws</string>
-    <string name="stream_control_endpoint_hint">Quest 3 实机请填写开发机局域网地址，例如 ws://192.168.1.20:8080/ws；10.0.2.2 仅适用于 Android 模拟器。</string>
+    <string name="stream_control_endpoint_placeholder">例如 ws://192.168.1.20:8080/ws 或 wss://signal.example/ws</string>
+    <string name="stream_control_endpoint_hint">局域网 receiver app 请填写 ws://192.168.1.20:8080/ws；部署到 HTTPS 的 browser-preview 请填写 wss://signal.example/ws；10.0.2.2 仅适用于 Android 模拟器。</string>
     <string name="stream_control_scan_button">扫码连接接收端</string>
     <string name="stream_control_session_id_label">Session ID</string>
     <string name="stream_control_ice_hint">ICE 默认使用 Google STUN，可在后续阶段扩展 TURN / 鉴权。</string>

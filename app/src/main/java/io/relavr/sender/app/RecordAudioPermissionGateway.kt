@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
 internal interface RecordAudioPermissionGateway {
+    fun hasPermission(): Boolean
+
     suspend fun requestPermissionIfNeeded(): Boolean
 }
 
@@ -22,20 +24,27 @@ internal class AndroidRecordAudioPermissionGateway(
 
     val permissionRequests: SharedFlow<String> = _permissionRequests.asSharedFlow()
 
-    override suspend fun requestPermissionIfNeeded(): Boolean {
+    override fun hasPermission(): Boolean =
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            return true
-        }
-        if (
+            true
+        } else {
             ContextCompat.checkSelfPermission(
                 appContext,
                 Manifest.permission.RECORD_AUDIO,
             ) == PackageManager.PERMISSION_GRANTED
-        ) {
-            return true
         }
 
-        check(pendingRequest == null) { "A record-audio permission request is already pending." }
+    override suspend fun requestPermissionIfNeeded(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return true
+        }
+        if (hasPermission()) {
+            return true
+        }
+        pendingRequest?.let { pending ->
+            return pending.await()
+        }
+
         val deferred = CompletableDeferred<Boolean>()
         pendingRequest = deferred
         _permissionRequests.emit(Manifest.permission.RECORD_AUDIO)
