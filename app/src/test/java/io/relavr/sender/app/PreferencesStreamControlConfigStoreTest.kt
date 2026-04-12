@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
 
@@ -73,6 +75,29 @@ class PreferencesStreamControlConfigStoreTest {
                 )
 
             assertEquals(StreamConfig(), configStore.load())
+        }
+
+    @Test
+    fun `record audio permission request flag persists once marked`() =
+        runTest {
+            val permissionStore = PreferencesRecordAudioPermissionPreferenceStore(FakePreferencesDataStore())
+
+            assertFalse(permissionStore.hasRequestedBefore())
+
+            permissionStore.markRequested()
+
+            assertTrue(permissionStore.hasRequestedBefore())
+        }
+
+    @Test
+    fun `record audio permission request flag falls back to false on io exception`() =
+        runTest {
+            val permissionStore =
+                PreferencesRecordAudioPermissionPreferenceStore(
+                    FailingPreferencesDataStore(IOException("boom")),
+                )
+
+            assertFalse(permissionStore.hasRequestedBefore())
         }
 
     private class FakePreferencesDataStore(

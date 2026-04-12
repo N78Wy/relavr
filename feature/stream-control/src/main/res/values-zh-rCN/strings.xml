@@ -12,6 +12,8 @@
     <string name="stream_control_audio_starting">音频准备中。</string>
     <string name="stream_control_audio_publishing">音频推流中。</string>
     <string name="stream_control_audio_default">开始推流后会采集系统播放音频。</string>
+    <string name="stream_control_audio_permission_permanently_denied">录音权限已被永久拒绝，请先到系统设置里重新开启后再恢复音频采集。</string>
+    <string name="stream_control_audio_open_settings">打开系统设置</string>
     <string name="stream_control_codec_fallback">本次请求 %1$s，实际使用 %2$s。</string>
     <string name="stream_control_codec_active">本次会话使用 %1$s。</string>
     <string name="stream_control_codec_probable_default">默认优先 %1$s，正在探测设备与 WebRTC 编码能力。</string>

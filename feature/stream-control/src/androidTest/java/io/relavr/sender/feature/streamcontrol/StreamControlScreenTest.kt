@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -228,6 +229,33 @@ class StreamControlScreenTest {
     }
 
     @Test
+    fun permanently_denied_audio_permission_shows_the_settings_action() {
+        var openSettingsCount = 0
+
+        setStreamControlContent(
+            uiState =
+                buildStreamControlUiState(
+                    config =
+                        StreamConfig(
+                            signalingEndpoint = VALID_SIGNALING_ENDPOINT,
+                            audioEnabled = false,
+                        ),
+                    sessionSnapshot = StreamingSessionSnapshot(),
+                    recordAudioPermissionStatus = RecordAudioPermissionStatus.PermanentlyDenied,
+                ),
+            onOpenAudioPermissionSettingsClicked = { openSettingsCount += 1 },
+        )
+
+        composeRule
+            .onNodeWithText("Audio permission was permanently denied. Open system settings to re-enable audio capture.")
+            .assertIsDisplayed()
+        composeRule.onNodeWithTag(StreamControlTestTags.AUDIO_SWITCH).assertIsNotEnabled()
+        composeRule.onNodeWithTag(StreamControlTestTags.START_BUTTON).assertIsEnabled()
+        composeRule.onNodeWithTag(StreamControlTestTags.AUDIO_PERMISSION_SETTINGS_BUTTON).performClick()
+        assertEquals(1, openSettingsCount)
+    }
+
+    @Test
     fun codec_options_are_switchable_and_unsupported_ones_stay_disabled() {
         var selectedCodec = CodecPreference.H264
 
@@ -335,6 +363,7 @@ class StreamControlScreenTest {
         onSessionIdChanged: (String) -> Unit = {},
         onCodecPreferenceChanged: (CodecPreference) -> Unit = {},
         onAudioEnabledChanged: (Boolean) -> Unit = {},
+        onOpenAudioPermissionSettingsClicked: () -> Unit = {},
         onOpenScannerClicked: () -> Unit = {},
         onResolutionChanged: (VideoResolution) -> Unit = {},
         onFpsChanged: (Int) -> Unit = {},
@@ -352,6 +381,7 @@ class StreamControlScreenTest {
                     onSessionIdChanged = onSessionIdChanged,
                     onCodecPreferenceChanged = onCodecPreferenceChanged,
                     onAudioEnabledChanged = onAudioEnabledChanged,
+                    onOpenAudioPermissionSettingsClicked = onOpenAudioPermissionSettingsClicked,
                     onOpenScannerClicked = onOpenScannerClicked,
                     onResolutionChanged = onResolutionChanged,
                     onFpsChanged = onFpsChanged,

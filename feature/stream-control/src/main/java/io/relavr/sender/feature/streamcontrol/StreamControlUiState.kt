@@ -41,6 +41,7 @@ data class StreamControlUiState(
     val audioPermissionRequestPending: Boolean,
     val audioToggleEnabled: Boolean,
     val audioStatusLabel: UiText,
+    val audioPermissionSettingsVisible: Boolean,
     val streamProfileSummary: UiText,
     val resolutionOptions: List<SelectionOptionUiState<VideoResolution>>,
     val fpsOptions: List<SelectionOptionUiState<Int>>,
@@ -55,6 +56,7 @@ internal fun buildStreamControlUiState(
     scannerState: QrScannerState = QrScannerState(),
     sessionSnapshot: StreamingSessionSnapshot,
     audioPermissionRequestPending: Boolean = false,
+    recordAudioPermissionStatus: RecordAudioPermissionStatus? = null,
 ): StreamControlUiState {
     val capabilities = sessionSnapshot.capabilities
     val configEditable =
@@ -90,8 +92,18 @@ internal fun buildStreamControlUiState(
         audioToggleEnabled =
             configEditable &&
                 capabilities?.audioPlaybackCaptureSupported != false &&
-                !audioPermissionRequestPending,
-        audioStatusLabel = sessionSnapshot.toAudioStatusLabel(config, audioPermissionRequestPending),
+                !audioPermissionRequestPending &&
+                recordAudioPermissionStatus != RecordAudioPermissionStatus.PermanentlyDenied,
+        audioStatusLabel =
+            sessionSnapshot.toAudioStatusLabel(
+                config = config,
+                audioPermissionRequestPending = audioPermissionRequestPending,
+                recordAudioPermissionStatus = recordAudioPermissionStatus,
+            ),
+        audioPermissionSettingsVisible =
+            configEditable &&
+                capabilities?.audioPlaybackCaptureSupported != false &&
+                recordAudioPermissionStatus == RecordAudioPermissionStatus.PermanentlyDenied,
         streamProfileSummary =
             UiText.of(
                 R.string.stream_control_profile_summary,
@@ -182,10 +194,13 @@ private fun StreamingSessionSnapshot.toStatusDescription(config: StreamConfig): 
 private fun StreamingSessionSnapshot.toAudioStatusLabel(
     config: StreamConfig,
     audioPermissionRequestPending: Boolean,
+    recordAudioPermissionStatus: RecordAudioPermissionStatus?,
 ): UiText =
     when {
         audioPermissionRequestPending ->
             UiText.of(io.relavr.sender.core.model.R.string.sender_status_permission_requested)
+        recordAudioPermissionStatus == RecordAudioPermissionStatus.PermanentlyDenied ->
+            UiText.of(R.string.stream_control_audio_permission_permanently_denied)
         capabilities?.audioPlaybackCaptureSupported == false -> UiText.of(R.string.stream_control_audio_unsupported)
         !config.audioEnabled -> UiText.of(R.string.stream_control_audio_disabled)
         audioState == AudioStreamState.Starting -> UiText.of(R.string.stream_control_audio_starting)

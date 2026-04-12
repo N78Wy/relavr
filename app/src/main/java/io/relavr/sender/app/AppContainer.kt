@@ -25,6 +25,7 @@ class AppContainer(
 
     val projectionPermissionGateway = AndroidProjectionPermissionGateway(mediaProjectionManager)
     internal val recordAudioPermissionGateway = AndroidRecordAudioPermissionGateway(application)
+    internal val recordAudioPermissionPreferenceStore = createRecordAudioPermissionPreferenceStore(application)
 
     internal val sessionEngine: StreamingSessionController =
         StreamingSessionCoordinator(

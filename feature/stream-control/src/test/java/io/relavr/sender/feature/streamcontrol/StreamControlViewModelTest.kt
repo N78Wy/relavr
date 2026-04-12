@@ -293,7 +293,7 @@ class StreamControlViewModelTest {
             }
             advanceUntilIdle()
 
-            viewModel.onRecordAudioPermissionSnapshot(false)
+            viewModel.onRecordAudioPermissionSnapshot(RecordAudioPermissionStatus.Requestable)
             advanceUntilIdle()
             assertEquals(0, permissionRequests.size)
 
@@ -319,11 +319,11 @@ class StreamControlViewModelTest {
                 )
             advanceUntilIdle()
 
-            viewModel.onRecordAudioPermissionSnapshot(false)
+            viewModel.onRecordAudioPermissionSnapshot(RecordAudioPermissionStatus.Requestable)
             advanceUntilIdle()
             assertTrue(viewModel.uiState.value.audioPermissionRequestPending)
 
-            viewModel.onRecordAudioPermissionResolved(false)
+            viewModel.onRecordAudioPermissionResolved(RecordAudioPermissionStatus.Requestable)
             advanceUntilIdle()
 
             assertFalse(viewModel.uiState.value.audioEnabled)
@@ -334,6 +334,35 @@ class StreamControlViewModelTest {
             advanceUntilIdle()
 
             assertTrue(viewModel.uiState.value.audioPermissionRequestPending)
+        }
+
+    @Test
+    fun `permanently denied record permission keeps audio off and shows the settings action`() =
+        runTest(dispatcher.scheduler) {
+            val configStore =
+                FakeStreamControlConfigStore(
+                    initialConfig = StreamConfig(signalingEndpoint = VALID_SIGNALING_ENDPOINT),
+                )
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = FakeStreamingSessionController(),
+                    configStore = configStore,
+                )
+            val permissionRequests = mutableListOf<Unit>()
+
+            backgroundScope.launch(dispatcher) {
+                viewModel.recordAudioPermissionRequests.collect { permissionRequests += Unit }
+            }
+            advanceUntilIdle()
+
+            viewModel.onRecordAudioPermissionSnapshot(RecordAudioPermissionStatus.PermanentlyDenied)
+            advanceUntilIdle()
+
+            assertEquals(0, permissionRequests.size)
+            assertFalse(viewModel.uiState.value.audioEnabled)
+            assertFalse(viewModel.uiState.value.audioToggleEnabled)
+            assertTrue(viewModel.uiState.value.audioPermissionSettingsVisible)
+            assertFalse(configStore.storedConfig.audioEnabled)
         }
 
     @Test
@@ -359,7 +388,7 @@ class StreamControlViewModelTest {
             }
             advanceUntilIdle()
 
-            viewModel.onRecordAudioPermissionSnapshot(true)
+            viewModel.onRecordAudioPermissionSnapshot(RecordAudioPermissionStatus.Granted)
             advanceUntilIdle()
 
             viewModel.onAudioToggleRequested(true)

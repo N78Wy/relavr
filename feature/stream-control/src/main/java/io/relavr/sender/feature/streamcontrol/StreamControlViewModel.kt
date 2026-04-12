@@ -31,10 +31,10 @@ class StreamControlViewModel(
     private val config = MutableStateFlow(initialConfig)
     private val qrScannerState = MutableStateFlow(QrScannerState())
     private val audioPermissionRequestPending = MutableStateFlow(false)
+    private val recordAudioPermissionStatus = MutableStateFlow<RecordAudioPermissionStatus?>(null)
     private val _recordAudioPermissionRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private var hasLocalEdits = false
     private var hasLoadedPersistedConfig = false
-    private var recordAudioPermissionGranted: Boolean? = null
     private var shouldEnableAudioAfterPermission = false
 
     val recordAudioPermissionRequests: SharedFlow<Unit> = _recordAudioPermissionRequests.asSharedFlow()
@@ -45,12 +45,14 @@ class StreamControlViewModel(
             qrScannerState,
             sessionController.observeState(),
             audioPermissionRequestPending,
-        ) { currentConfig, currentQrScannerState, sessionState, isAudioPermissionRequestPending ->
+            recordAudioPermissionStatus,
+        ) { currentConfig, currentQrScannerState, sessionState, isAudioPermissionRequestPending, currentRecordAudioPermissionStatus ->
             buildStreamControlUiState(
                 config = currentConfig,
                 scannerState = currentQrScannerState,
                 sessionSnapshot = sessionState,
                 audioPermissionRequestPending = isAudioPermissionRequestPending,
+                recordAudioPermissionStatus = currentRecordAudioPermissionStatus,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -61,6 +63,7 @@ class StreamControlViewModel(
                     scannerState = qrScannerState.value,
                     sessionSnapshot = sessionController.observeState().value,
                     audioPermissionRequestPending = audioPermissionRequestPending.value,
+                    recordAudioPermissionStatus = recordAudioPermissionStatus.value,
                 ),
         )
 
@@ -127,9 +130,17 @@ class StreamControlViewModel(
             return
         }
 
-        if (recordAudioPermissionGranted == true) {
+        if (recordAudioPermissionStatus.value == RecordAudioPermissionStatus.Granted) {
             updateConfig { current ->
                 current.copy(audioEnabled = true)
+            }
+            return
+        }
+
+        if (recordAudioPermissionStatus.value == RecordAudioPermissionStatus.PermanentlyDenied) {
+            shouldEnableAudioAfterPermission = false
+            updateConfig { current ->
+                current.copy(audioEnabled = false)
             }
             return
         }
@@ -138,18 +149,22 @@ class StreamControlViewModel(
         requestRecordAudioPermission()
     }
 
-    fun onRecordAudioPermissionSnapshot(granted: Boolean) {
-        recordAudioPermissionGranted = granted
-        if (granted) {
-            audioPermissionRequestPending.value = false
+    fun onRecordAudioPermissionSnapshot(status: RecordAudioPermissionStatus) {
+        recordAudioPermissionStatus.value = status
+        audioPermissionRequestPending.value = false
+        if (status == RecordAudioPermissionStatus.PermanentlyDenied && config.value.audioEnabled) {
+            shouldEnableAudioAfterPermission = false
+            updateConfig { current ->
+                current.copy(audioEnabled = false)
+            }
         }
         maybeRequestRecordAudioPermissionForEnabledAudio()
     }
 
-    fun onRecordAudioPermissionResolved(granted: Boolean) {
-        recordAudioPermissionGranted = granted
+    fun onRecordAudioPermissionResolved(status: RecordAudioPermissionStatus) {
+        recordAudioPermissionStatus.value = status
         audioPermissionRequestPending.value = false
-        if (granted) {
+        if (status == RecordAudioPermissionStatus.Granted) {
             if (shouldEnableAudioAfterPermission) {
                 updateConfig { current ->
                     current.copy(audioEnabled = true)
@@ -277,7 +292,7 @@ class StreamControlViewModel(
         if (!hasLoadedPersistedConfig || config.value.audioEnabled.not()) {
             return
         }
-        if (recordAudioPermissionGranted != false) {
+        if (recordAudioPermissionStatus.value != RecordAudioPermissionStatus.Requestable) {
             return
         }
         shouldEnableAudioAfterPermission = true

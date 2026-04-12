@@ -51,6 +51,7 @@ object StreamControlTestTags {
     const val STOP_BUTTON = "stream-stop"
     const val SCAN_BUTTON = "stream-scan"
     const val AUDIO_SWITCH = "stream-audio-switch"
+    const val AUDIO_PERMISSION_SETTINGS_BUTTON = "stream-audio-permission-settings"
     const val SIGNALING_ENDPOINT_INPUT = "stream-signaling-endpoint"
     const val SESSION_ID_INPUT = "stream-session-id"
     const val STREAM_PROFILE_CARD = "stream-profile-card"
@@ -79,6 +80,7 @@ fun streamControlScreen(
     onSessionIdChanged: (String) -> Unit,
     onCodecPreferenceChanged: (CodecPreference) -> Unit,
     onAudioEnabledChanged: (Boolean) -> Unit,
+    onOpenAudioPermissionSettingsClicked: () -> Unit,
     onOpenScannerClicked: () -> Unit,
     onResolutionChanged: (VideoResolution) -> Unit,
     onFpsChanged: (Int) -> Unit,
@@ -154,6 +156,7 @@ fun streamControlScreen(
                                 onSessionIdChanged = onSessionIdChanged,
                                 onCodecPreferenceChanged = onCodecPreferenceChanged,
                                 onAudioEnabledChanged = onAudioEnabledChanged,
+                                onOpenAudioPermissionSettingsClicked = onOpenAudioPermissionSettingsClicked,
                                 onOpenScannerClicked = onOpenScannerClicked,
                             )
                         }
@@ -186,6 +189,7 @@ fun streamControlScreen(
                         onSessionIdChanged = onSessionIdChanged,
                         onCodecPreferenceChanged = onCodecPreferenceChanged,
                         onAudioEnabledChanged = onAudioEnabledChanged,
+                        onOpenAudioPermissionSettingsClicked = onOpenAudioPermissionSettingsClicked,
                         onOpenScannerClicked = onOpenScannerClicked,
                     )
                     streamProfileCard(
@@ -252,6 +256,7 @@ private fun configCard(
     onSessionIdChanged: (String) -> Unit,
     onCodecPreferenceChanged: (CodecPreference) -> Unit,
     onAudioEnabledChanged: (Boolean) -> Unit,
+    onOpenAudioPermissionSettingsClicked: () -> Unit,
     onOpenScannerClicked: () -> Unit,
 ) {
     surfaceCard {
@@ -342,7 +347,11 @@ private fun configCard(
 
         if (layoutMode == StreamControlLayoutMode.Compact) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                audioSummary(uiState.audioStatusLabel)
+                audioSummary(
+                    audioStatusLabel = uiState.audioStatusLabel,
+                    showSettingsAction = uiState.audioPermissionSettingsVisible,
+                    onOpenAudioPermissionSettingsClicked = onOpenAudioPermissionSettingsClicked,
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
@@ -361,7 +370,12 @@ private fun configCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                audioSummary(uiState.audioStatusLabel)
+                audioSummary(
+                    audioStatusLabel = uiState.audioStatusLabel,
+                    showSettingsAction = uiState.audioPermissionSettingsVisible,
+                    onOpenAudioPermissionSettingsClicked = onOpenAudioPermissionSettingsClicked,
+                    modifier = Modifier.weight(1f),
+                )
                 Switch(
                     checked = uiState.audioEnabled,
                     onCheckedChange = onAudioEnabledChanged,
@@ -374,8 +388,16 @@ private fun configCard(
 }
 
 @Composable
-private fun audioSummary(audioStatusLabel: UiText) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+private fun audioSummary(
+    audioStatusLabel: UiText,
+    showSettingsAction: Boolean,
+    onOpenAudioPermissionSettingsClicked: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         Text(
             text = stringResource(R.string.stream_control_audio_switch_label),
             style = MaterialTheme.typography.titleSmall,
@@ -387,6 +409,14 @@ private fun audioSummary(audioStatusLabel: UiText) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (showSettingsAction) {
+            OutlinedButton(
+                onClick = onOpenAudioPermissionSettingsClicked,
+                modifier = Modifier.testTag(StreamControlTestTags.AUDIO_PERMISSION_SETTINGS_BUTTON),
+            ) {
+                Text(stringResource(R.string.stream_control_audio_open_settings))
+            }
+        }
     }
 }
 
@@ -785,6 +815,7 @@ private fun streamControlScreenPreview() {
         onSessionIdChanged = {},
         onCodecPreferenceChanged = {},
         onAudioEnabledChanged = {},
+        onOpenAudioPermissionSettingsClicked = {},
         onOpenScannerClicked = {},
         onResolutionChanged = {},
         onFpsChanged = {},

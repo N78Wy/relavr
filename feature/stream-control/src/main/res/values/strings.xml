@@ -12,6 +12,8 @@
     <string name="stream_control_audio_starting">Preparing audio capture.</string>
     <string name="stream_control_audio_publishing">Streaming system audio.</string>
     <string name="stream_control_audio_default">System playback audio will be captured after streaming starts.</string>
+    <string name="stream_control_audio_permission_permanently_denied">Audio permission was permanently denied. Open system settings to re-enable audio capture.</string>
+    <string name="stream_control_audio_open_settings">Open System Settings</string>
     <string name="stream_control_codec_fallback">Requested %1$s. Using %2$s instead.</string>
     <string name="stream_control_codec_active">This session is using %1$s.</string>
     <string name="stream_control_codec_probable_default">Default preference is %1$s while device and WebRTC capabilities are loading.</string>
