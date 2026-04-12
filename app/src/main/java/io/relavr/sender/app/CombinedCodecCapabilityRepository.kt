@@ -11,13 +11,23 @@ internal class CombinedCodecCapabilityRepository(
     override suspend fun getCapabilities(): CapabilitySnapshot {
         val androidCapabilities = androidCapabilityRepository.getCapabilities()
         val webRtcSupportedCodecs = webRtcCodecSupportProvider.getSupportedCodecs()
+        val supportedProfiles =
+            androidCapabilities.supportedProfiles.filterTo(linkedSetOf()) { profile ->
+                profile.codecPreference in webRtcSupportedCodecs
+            }
         val supportedCodecs =
-            androidCapabilities.supportedCodecs.intersect(webRtcSupportedCodecs)
+            androidCapabilities
+                .supportedCodecs
+                .intersect(webRtcSupportedCodecs)
+                .filterTo(linkedSetOf()) { codecPreference ->
+                    supportedProfiles.isEmpty() || supportedProfiles.any { profile -> profile.codecPreference == codecPreference }
+                }
 
         return CapabilitySnapshot(
             supportedCodecs = supportedCodecs,
             audioPlaybackCaptureSupported = androidCapabilities.audioPlaybackCaptureSupported,
             defaultCodec = CapabilitySnapshot.resolveDefaultCodec(supportedCodecs),
+            supportedProfiles = supportedProfiles,
         )
     }
 }

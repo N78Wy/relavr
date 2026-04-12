@@ -94,4 +94,35 @@ class StreamConfigTest {
             ).validationError(),
         )
     }
+
+    @Test
+    fun `unsupported capability combinations return a profile error`() {
+        val capabilities =
+            CapabilitySnapshot(
+                supportedCodecs = setOf(CodecPreference.H264),
+                audioPlaybackCaptureSupported = true,
+                supportedProfiles =
+                    setOf(
+                        VideoStreamProfile(
+                            codecPreference = CodecPreference.H264,
+                            resolution = VideoResolution(width = 1280, height = 720),
+                            fps = 30,
+                            bitrateKbps = 4000,
+                        ),
+                    ),
+            )
+
+        assertEquals(
+            SenderError.InvalidConfig(
+                message = "The selected codec and stream profile are not supported together.",
+                uiText = UiText.of(R.string.sender_error_profile_unsupported),
+            ),
+            StreamConfig(
+                signalingEndpoint = "ws://192.168.1.20:8080/ws",
+                resolution = VideoResolution(width = 1920, height = 1080),
+                fps = 60,
+                bitrateKbps = 8000,
+            ).validationError(capabilities),
+        )
+    }
 }

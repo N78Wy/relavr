@@ -46,6 +46,7 @@
     <string name="stream_control_ice_hint">Google STUN is used by default. TURN and authentication can be added later.</string>
     <string name="stream_control_profile_title">Stream Profile</string>
     <string name="stream_control_profile_summary">%1$s / %2$s FPS / %3$s kbps</string>
+    <string name="stream_control_profile_summary_requested_and_active">Requested %1$s / %2$s FPS / %3$s kbps. Active %4$s / %5$s FPS / %6$s kbps.</string>
     <string name="stream_control_start_button">Start Streaming</string>
     <string name="stream_control_stop_button">Stop Streaming</string>
     <string name="stream_control_audio_switch_label">Enable audio capture</string>

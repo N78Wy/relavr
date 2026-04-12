@@ -9,6 +9,7 @@ import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
 import io.relavr.sender.core.model.UiText
 import io.relavr.sender.core.model.VideoResolution
+import io.relavr.sender.core.model.VideoStreamProfile
 
 data class CodecOptionUiState(
     val preference: CodecPreference,
@@ -63,7 +64,11 @@ internal fun buildStreamControlUiState(
         !sessionSnapshot.isStreaming &&
             sessionSnapshot.captureState != CaptureState.RequestingPermission &&
             sessionSnapshot.publishState != PublishState.Preparing
-    val configValid = config.validationError() == null
+    val capabilityValidationError =
+        capabilities?.let { capabilitySnapshot ->
+            config.validationError(capabilitySnapshot)
+        }
+    val configValid = config.validationError() == null && capabilityValidationError == null
     val hasActiveSession =
         sessionSnapshot.captureState != CaptureState.Idle ||
             sessionSnapshot.publishState != PublishState.Idle
@@ -105,12 +110,7 @@ internal fun buildStreamControlUiState(
                 capabilities?.audioPlaybackCaptureSupported != false &&
                 recordAudioPermissionStatus == RecordAudioPermissionStatus.PermanentlyDenied,
         streamProfileSummary =
-            UiText.of(
-                R.string.stream_control_profile_summary,
-                config.resolution.label,
-                config.fps,
-                config.bitrateKbps,
-            ),
+            sessionSnapshot.toStreamProfileSummary(config),
         resolutionOptions =
             buildSelectionOptions(
                 options = StreamConfig.RESOLUTION_OPTIONS,
@@ -135,7 +135,7 @@ internal fun buildStreamControlUiState(
                 sessionSnapshot.captureState != CaptureState.Stopping &&
                 sessionSnapshot.publishState != PublishState.Stopping &&
                 sessionSnapshot.error == null,
-        errorMessage = sessionSnapshot.error?.uiText,
+        errorMessage = sessionSnapshot.error?.uiText ?: capabilityValidationError?.uiText,
     )
 }
 
@@ -190,6 +190,27 @@ private fun StreamingSessionSnapshot.toStatusDescription(config: StreamConfig): 
             )
     }
 }
+
+private fun StreamingSessionSnapshot.toStreamProfileSummary(config: StreamConfig): UiText {
+    val activeProfile = activeVideoProfile ?: return config.toVideoStreamProfile().toRequestedProfileSummary()
+    return UiText.of(
+        R.string.stream_control_profile_summary_requested_and_active,
+        config.resolution.label,
+        config.fps,
+        config.bitrateKbps,
+        activeProfile.resolution.label,
+        activeProfile.fps,
+        activeProfile.bitrateKbps,
+    )
+}
+
+private fun VideoStreamProfile.toRequestedProfileSummary(): UiText =
+    UiText.of(
+        R.string.stream_control_profile_summary,
+        resolution.label,
+        fps,
+        bitrateKbps,
+    )
 
 private fun StreamingSessionSnapshot.toAudioStatusLabel(
     config: StreamConfig,

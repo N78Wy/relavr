@@ -116,6 +116,17 @@ class StreamingSessionCoordinator(
                     }
                 val selection = codecPolicy.select(config.codecPreference, capabilities)
                 val resolvedConfig = config.copy(codecPreference = selection.resolved)
+                val resolvedConfigError = resolvedConfig.validationError(capabilities)
+                if (resolvedConfigError != null) {
+                    activeSessionToken = null
+                    resources.closeAllQuietly()
+                    handleFailure(
+                        error = resolvedConfigError,
+                        throwable = null,
+                        operation = "Resolved streaming configuration validation failed",
+                    )
+                    return
+                }
                 var audioState =
                     if (resolvedConfig.audioEnabled) {
                         AudioStreamState.Starting
@@ -166,7 +177,11 @@ class StreamingSessionCoordinator(
 
                 val publishSession =
                     withContext(dispatchers.io) {
-                        rtcPublisherFactory.createSession(resolvedConfig, signalingSession)
+                        rtcPublisherFactory.createSession(
+                            config = resolvedConfig,
+                            capabilities = capabilities,
+                            signalingSession = signalingSession,
+                        )
                     }
                 resources += publishSession
 
@@ -204,6 +219,7 @@ class StreamingSessionCoordinator(
                         audioState = finalAudioState,
                         audioDetail = finalAudioDetail,
                         resolvedConfig = resolvedConfig,
+                        activeVideoProfile = resolvedConfig.toVideoStreamProfile(),
                         capabilities = capabilities,
                         codecSelection = selection,
                         statusDetail =
@@ -240,6 +256,7 @@ class StreamingSessionCoordinator(
                             audioState = AudioStreamState.Disabled,
                             audioDetail = null,
                             resolvedConfig = null,
+                            activeVideoProfile = null,
                             codecSelection = null,
                             statusDetail = null,
                             error = null,
@@ -275,6 +292,7 @@ class StreamingSessionCoordinator(
                         audioState = AudioStreamState.Disabled,
                         audioDetail = null,
                         resolvedConfig = null,
+                        activeVideoProfile = null,
                         codecSelection = null,
                         statusDetail = null,
                         error = null,
@@ -339,6 +357,23 @@ class StreamingSessionCoordinator(
                         }
                     }
 
+                    is RtcSessionEvent.VideoProfileChanged -> {
+                        if (activeSessionToken === sessionToken) {
+                            state.update { current ->
+                                current.copy(
+                                    activeVideoProfile = event.activeProfile,
+                                    statusDetail = event.detail,
+                                )
+                            }
+                        }
+                    }
+
+                    is RtcSessionEvent.VideoEncoderOverloaded ->
+                        terminateFromRtcEvent(
+                            sessionToken = sessionToken,
+                            error = event.error,
+                        )
+
                     RtcSessionEvent.Disconnected ->
                         terminateFromRtcEvent(
                             sessionToken = sessionToken,
@@ -378,6 +413,7 @@ class StreamingSessionCoordinator(
                     captureState = CaptureState.Error,
                     publishState = PublishState.Error,
                     resolvedConfig = null,
+                    activeVideoProfile = null,
                     codecSelection = null,
                     statusDetail = error.uiText,
                     error = error,
@@ -403,6 +439,7 @@ class StreamingSessionCoordinator(
                 captureState = CaptureState.Error,
                 publishState = PublishState.Error,
                 resolvedConfig = null,
+                activeVideoProfile = null,
                 codecSelection = null,
                 statusDetail = error.uiText,
                 error = error,

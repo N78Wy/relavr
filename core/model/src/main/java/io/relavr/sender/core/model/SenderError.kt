@@ -42,6 +42,11 @@ sealed interface SenderError {
         override val uiText: UiText = UiText.of(R.string.sender_error_peer_connection_failed),
     ) : SenderError
 
+    data class VideoEncoderOverloaded(
+        override val message: String,
+        override val uiText: UiText = UiText.of(R.string.sender_error_video_encoder_overloaded),
+    ) : SenderError
+
     data class CaptureInterrupted(
         override val message: String,
         override val uiText: UiText = UiText.of(R.string.sender_error_capture_interrupted),

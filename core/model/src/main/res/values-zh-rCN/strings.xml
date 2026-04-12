@@ -8,11 +8,13 @@
     <string name="sender_error_resolution_unsupported">所选分辨率不在支持列表内。</string>
     <string name="sender_error_fps_unsupported">所选帧率不在支持列表内。</string>
     <string name="sender_error_bitrate_unsupported">所选码率不在支持列表内。</string>
+    <string name="sender_error_profile_unsupported">当前设备不支持所选编码与推流规格的组合。</string>
     <string name="sender_error_signaling_endpoint_invalid">WebSocket 地址格式无效。</string>
     <string name="sender_error_signaling_endpoint_scheme_invalid">WebSocket 地址必须使用 ws:// 或 wss://。</string>
     <string name="sender_error_audio_capture_unavailable">当前设备不支持系统音频采集。</string>
     <string name="sender_error_signaling_failed">信令连接失败。</string>
     <string name="sender_error_peer_connection_failed">WebRTC 连接失败。</string>
+    <string name="sender_error_video_encoder_overloaded">视频编码器在自动降档后仍持续过载。</string>
     <string name="sender_error_capture_interrupted">屏幕采集已中断。</string>
     <string name="sender_error_session_start_failed">启动推流会话失败。</string>
     <string name="sender_error_session_stop_failed">停止推流会话失败。</string>
@@ -33,6 +35,7 @@
     <string name="sender_status_checking_ice">ICE 连接建立中。</string>
     <string name="sender_status_connected_webrtc">WebRTC 已连接。</string>
     <string name="sender_status_applying_remote_answer">正在应用远端 Answer。</string>
+    <string name="sender_status_video_profile_downgraded">检测到编码器过载，已自动降为 %1$s / %2$d FPS / %3$d kbps。</string>
     <string name="sender_audio_degraded_video_only">音频已降级为静音/仅视频。</string>
     <string name="sender_status_default_idle">已准备好开始推流。</string>
     <string name="sender_status_permission_requested">已发起权限请求，请完成系统弹窗。</string>

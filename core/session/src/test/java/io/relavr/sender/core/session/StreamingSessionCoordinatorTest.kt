@@ -7,6 +7,8 @@ import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.UiText
+import io.relavr.sender.core.model.VideoResolution
+import io.relavr.sender.core.model.VideoStreamProfile
 import io.relavr.sender.testing.fakes.FakeAppLogger
 import io.relavr.sender.testing.fakes.FakeAudioCaptureSource
 import io.relavr.sender.testing.fakes.FakeAudioCaptureSourceFactory
@@ -295,6 +297,96 @@ class StreamingSessionCoordinatorTest {
             )
             assertEquals(UiText.of(io.relavr.sender.core.model.R.string.sender_status_streaming_video_only), state.statusDetail)
             assertNull(state.error)
+        }
+
+    @Test
+    fun `video profile changes update the active profile without stopping the session`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val rtcPublisherFactory = FakeRtcPublisherFactory()
+            val coordinator =
+                StreamingSessionCoordinator(
+                    projectionPermissionGateway = FakeProjectionPermissionGateway(),
+                    audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(),
+                    codecCapabilityRepository = FakeCodecCapabilityRepository(),
+                    codecPolicy = FakeCodecPolicy(),
+                    rtcPublisherFactory = rtcPublisherFactory,
+                    signalingClient = FakeSignalingClient(),
+                    dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
+                    logger = FakeAppLogger(),
+                )
+
+            coordinator.start(StreamConfig(signalingEndpoint = VALID_SIGNALING_ENDPOINT))
+            advanceUntilIdle()
+
+            val activeProfile =
+                VideoStreamProfile(
+                    codecPreference = CodecPreference.H264,
+                    resolution = VideoResolution(width = 1280, height = 720),
+                    fps = 30,
+                    bitrateKbps = 4000,
+                )
+            rtcPublisherFactory.session.emitEvent(
+                RtcSessionEvent.VideoProfileChanged(
+                    activeProfile = activeProfile,
+                    detail =
+                        UiText.of(
+                            io.relavr.sender.core.model.R.string.sender_status_video_profile_downgraded,
+                            activeProfile.resolution.label,
+                            activeProfile.fps,
+                            activeProfile.bitrateKbps,
+                        ),
+                ),
+            )
+            advanceUntilIdle()
+
+            val state = coordinator.observeState().value
+            assertEquals(CaptureState.Capturing, state.captureState)
+            assertEquals(PublishState.Publishing, state.publishState)
+            assertEquals(activeProfile, state.activeVideoProfile)
+            assertEquals(
+                UiText.of(
+                    io.relavr.sender.core.model.R.string.sender_status_video_profile_downgraded,
+                    activeProfile.resolution.label,
+                    activeProfile.fps,
+                    activeProfile.bitrateKbps,
+                ),
+                state.statusDetail,
+            )
+        }
+
+    @Test
+    fun `encoder overload ends the session with a dedicated error`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val projectionAccess = FakeProjectionAccess()
+            val rtcPublisherFactory = FakeRtcPublisherFactory()
+            val coordinator =
+                StreamingSessionCoordinator(
+                    projectionPermissionGateway = FakeProjectionPermissionGateway(nextAccess = projectionAccess),
+                    audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(),
+                    codecCapabilityRepository = FakeCodecCapabilityRepository(),
+                    codecPolicy = FakeCodecPolicy(),
+                    rtcPublisherFactory = rtcPublisherFactory,
+                    signalingClient = FakeSignalingClient(),
+                    dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
+                    logger = FakeAppLogger(),
+                )
+
+            coordinator.start(StreamConfig(signalingEndpoint = VALID_SIGNALING_ENDPOINT))
+            advanceUntilIdle()
+            rtcPublisherFactory.session.emitEvent(
+                RtcSessionEvent.VideoEncoderOverloaded(
+                    SenderError.VideoEncoderOverloaded("video-overloaded"),
+                ),
+            )
+            advanceUntilIdle()
+
+            val state = coordinator.observeState().value
+            assertEquals(CaptureState.Error, state.captureState)
+            assertEquals(PublishState.Error, state.publishState)
+            assertEquals(SenderError.VideoEncoderOverloaded("video-overloaded"), state.error)
+            assertTrue(projectionAccess.closed)
         }
 
     @Test

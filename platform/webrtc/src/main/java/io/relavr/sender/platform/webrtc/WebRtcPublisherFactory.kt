@@ -5,10 +5,12 @@ import android.content.Intent
 import android.media.projection.MediaProjection
 import io.relavr.sender.core.common.AppLogger
 import io.relavr.sender.core.model.AudioStreamState
+import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.R
 import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.UiText
+import io.relavr.sender.core.model.VideoStreamProfile
 import io.relavr.sender.core.session.AudioCaptureSource
 import io.relavr.sender.core.session.ProjectionAccess
 import io.relavr.sender.core.session.PublishStartResult
@@ -23,6 +25,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -39,6 +42,9 @@ import org.webrtc.IceCandidate
 import org.webrtc.MediaConstraints
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnectionFactory
+import org.webrtc.RTCStatsReport
+import org.webrtc.RtpParameters
+import org.webrtc.RtpSender
 import org.webrtc.ScreenCapturerAndroid
 import org.webrtc.SessionDescription
 import org.webrtc.SurfaceTextureHelper
@@ -56,11 +62,13 @@ class WebRtcPublisherFactory(
 ) : RtcPublisherFactory {
     override suspend fun createSession(
         config: StreamConfig,
+        capabilities: CapabilitySnapshot,
         signalingSession: SignalingSession,
     ): RtcPublishSession =
         WebRtcPublishSession(
             appContext = appContext.applicationContext,
             config = config,
+            capabilities = capabilities,
             signalingSession = signalingSession,
             libraryInitializer = libraryInitializer,
             logger = logger,
@@ -70,6 +78,7 @@ class WebRtcPublisherFactory(
 private class WebRtcPublishSession(
     private val appContext: Context,
     private val config: StreamConfig,
+    private val capabilities: CapabilitySnapshot,
     private val signalingSession: SignalingSession,
     private val libraryInitializer: WebRtcLibraryInitializer,
     private val logger: AppLogger,
@@ -92,9 +101,11 @@ private class WebRtcPublishSession(
     private var surfaceTextureHelper: SurfaceTextureHelper? = null
     private var videoSource: VideoSource? = null
     private var videoTrack: VideoTrack? = null
+    private var videoSender: RtpSender? = null
     private var webrtcAudioSource: AudioSource? = null
     private var webrtcAudioTrack: AudioTrack? = null
     private var signalingJob: Job? = null
+    private var videoMonitorJob: Job? = null
 
     override val events: Flow<RtcSessionEvent> = eventFlow.asSharedFlow()
 
@@ -102,6 +113,12 @@ private class WebRtcPublishSession(
         projectionAccess: ProjectionAccess,
         audioSource: AudioCaptureSource?,
     ): PublishStartResult {
+        val initialVideoProfile = config.toVideoStreamProfile()
+        val adaptiveVideoProfileController =
+            AdaptiveVideoProfileController(
+                initialProfile = initialVideoProfile,
+                supportedProfiles = capabilities.supportedProfiles,
+            )
         val permission =
             projectionAccess.mediaProjectionPermission()
                 ?: throw SenderException(SenderError.SessionStartFailed("Missing a valid MediaProjection permission result."))
@@ -162,10 +179,17 @@ private class WebRtcPublishSession(
                 localVideoSource,
             )
         videoTrack = localVideoTrack
-        peer.addTrack(localVideoTrack, listOf(sessionId))
+        val localVideoSender =
+            peer.addTrack(localVideoTrack, listOf(sessionId))
+                ?: throw SenderException(SenderError.PeerConnectionFailed("Unable to create the WebRTC video sender."))
+        videoSender = localVideoSender
+        applyVideoEncoderParameters(
+            peer = peer,
+            sender = localVideoSender,
+            profile = initialVideoProfile,
+        )
 
         val audioPublishResult = attachAudioTrack(peer, sessionId, capturer, audioSource)
-        peer.setBitrate(null, config.bitrateKbps * 1000, config.bitrateKbps * 1000)
 
         eventFlow.tryEmit(RtcSessionEvent.Status(UiText.of(R.string.sender_status_creating_offer)))
         val rawOffer = peer.awaitCreateOffer()
@@ -200,6 +224,12 @@ private class WebRtcPublishSession(
             timeoutMs = CONNECT_TIMEOUT_MS,
             timeoutError = SenderError.PeerConnectionFailed("Timed out while waiting for the WebRTC connection."),
         )
+        videoMonitorJob =
+            observeVideoEncoderHealth(
+                peer = peer,
+                sender = localVideoSender,
+                controller = adaptiveVideoProfileController,
+            )
         return audioPublishResult
     }
 
@@ -246,6 +276,122 @@ private class WebRtcPublishSession(
                 audioState = AudioStreamState.Degraded,
                 audioDetail = UiText.of(R.string.sender_audio_degraded_video_only),
             )
+        }
+    }
+
+    private fun observeVideoEncoderHealth(
+        peer: PeerConnection,
+        sender: RtpSender,
+        controller: AdaptiveVideoProfileController,
+    ): Job =
+        scope.launch {
+            while (!closed.get()) {
+                delay(VIDEO_STATS_POLL_INTERVAL_MS)
+
+                val previousProfile = controller.activeProfile()
+                val statsSample =
+                    runCatching {
+                        peer.awaitVideoStats(sender)
+                    }.onFailure { throwable ->
+                        logger.error(TAG, "Reading WebRTC video stats failed: ${throwable.message}", throwable)
+                    }.getOrNull()
+                        ?: continue
+
+                when (val decision = controller.evaluate(statsSample)) {
+                    null -> Unit
+
+                    is AdaptiveVideoProfileDecision.Downgrade -> {
+                        logger.error(
+                            TAG,
+                            "Video encoder overload detected. Applying profile ${decision.profile.summaryLabel}. ${decision.assessment.reasonSummary}",
+                            null,
+                        )
+                        applyVideoProfile(
+                            peer = peer,
+                            sender = sender,
+                            previousProfile = previousProfile,
+                            profile = decision.profile,
+                        )
+                        eventFlow.tryEmit(
+                            RtcSessionEvent.VideoProfileChanged(
+                                activeProfile = decision.profile,
+                                detail =
+                                    UiText.of(
+                                        R.string.sender_status_video_profile_downgraded,
+                                        decision.profile.resolution.label,
+                                        decision.profile.fps,
+                                        decision.profile.bitrateKbps,
+                                    ),
+                            ),
+                        )
+                    }
+
+                    is AdaptiveVideoProfileDecision.Exhausted -> {
+                        signalVideoEncoderOverloaded(
+                            SenderError.VideoEncoderOverloaded(
+                                "The video encoder remained overloaded at ${controller.activeProfile().summaryLabel}. ${decision.assessment.reasonSummary}",
+                            ),
+                        )
+                        return@launch
+                    }
+                }
+            }
+        }
+
+    private fun applyVideoProfile(
+        peer: PeerConnection,
+        sender: RtpSender,
+        previousProfile: VideoStreamProfile,
+        profile: VideoStreamProfile,
+    ) {
+        val currentVideoSource = videoSource
+        val currentCapturer = screenCapturer
+        if (currentVideoSource == null || currentCapturer == null) {
+            return
+        }
+
+        if (previousProfile.resolution != profile.resolution) {
+            currentCapturer.changeCaptureFormat(
+                profile.resolution.width,
+                profile.resolution.height,
+                profile.fps,
+            )
+        }
+        currentVideoSource.adaptOutputFormat(
+            profile.resolution.width,
+            profile.resolution.height,
+            profile.fps,
+        )
+        applyVideoEncoderParameters(
+            peer = peer,
+            sender = sender,
+            profile = profile,
+        )
+    }
+
+    private fun applyVideoEncoderParameters(
+        peer: PeerConnection,
+        sender: RtpSender,
+        profile: VideoStreamProfile,
+    ) {
+        val parameters = sender.parameters
+        parameters.degradationPreference = RtpParameters.DegradationPreference.MAINTAIN_RESOLUTION
+        val encoding = parameters.encodings.firstOrNull()
+        if (encoding == null) {
+            logger.error(TAG, "The WebRTC video sender reported no encodings for ${profile.summaryLabel}.", null)
+        } else {
+            encoding.maxBitrateBps = profile.bitrateKbps * 1000
+            encoding.maxFramerate = profile.fps
+            encoding.scaleResolutionDownBy = null
+            val applied = sender.setParameters(parameters)
+            if (!applied) {
+                logger.error(TAG, "Applying WebRTC video sender parameters failed for ${profile.summaryLabel}.", null)
+            }
+        }
+
+        val bitrateApplied = peer.setBitrate(null, profile.bitrateKbps * 1000, profile.bitrateKbps * 1000)
+        if (!bitrateApplied) {
+            logger.error(TAG, "Applying peer bitrate constraints failed for ${profile.summaryLabel}.", null)
         }
     }
 
@@ -417,6 +563,13 @@ private class WebRtcPublishSession(
         }
     }
 
+    private fun signalVideoEncoderOverloaded(error: SenderError.VideoEncoderOverloaded) {
+        if (!terminalError.complete(error)) {
+            return
+        }
+        eventFlow.tryEmit(RtcSessionEvent.VideoEncoderOverloaded(error))
+    }
+
     override fun close() {
         if (!closed.compareAndSet(false, true)) {
             return
@@ -424,6 +577,7 @@ private class WebRtcPublishSession(
 
         audioBridge.attachSource(null)
         signalingJob?.cancel()
+        videoMonitorJob?.cancel()
         runBlocking {
             runCatching {
                 signalingSession.send(SignalingMessage.Leave(config.trimmedSessionId))
@@ -443,6 +597,9 @@ private class WebRtcPublishSession(
         }
         runCatching {
             videoTrack?.dispose()
+        }
+        runCatching {
+            videoSender?.dispose()
         }
         runCatching {
             videoSource?.dispose()
@@ -493,6 +650,7 @@ private class WebRtcPublishSession(
         const val AUDIO_TRACK_ID = "relavr-audio-track"
         const val ANSWER_TIMEOUT_MS = 15_000L
         const val CONNECT_TIMEOUT_MS = 10_000L
+        const val VIDEO_STATS_POLL_INTERVAL_MS = 1_000L
     }
 }
 
@@ -548,6 +706,20 @@ private class WebRtcRuntime(
         const val AUDIO_SAMPLE_RATE_HZ = 48_000
     }
 }
+
+private suspend fun PeerConnection.awaitVideoStats(sender: RtpSender): VideoEncoderStatsSample? =
+    kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+        getStats(
+            sender,
+            object : org.webrtc.RTCStatsCollectorCallback {
+                override fun onStatsDelivered(report: RTCStatsReport) {
+                    if (continuation.isActive) {
+                        continuation.resume(report.toVideoEncoderStatsSample())
+                    }
+                }
+            },
+        )
+    }
 
 private suspend fun PeerConnection.awaitCreateOffer(): SessionDescription {
     val constraints =
@@ -634,4 +806,52 @@ private suspend fun PeerConnection.awaitSetDescription(setBlock: (org.webrtc.Sdp
 private fun List<String>.toIceServers(): List<PeerConnection.IceServer> =
     map { url ->
         PeerConnection.IceServer.builder(url).createIceServer()
+    }
+
+private fun RTCStatsReport.toVideoEncoderStatsSample(): VideoEncoderStatsSample? {
+    val outboundVideoStat =
+        statsMap.values.firstOrNull { stats ->
+            stats.type == "outbound-rtp" && stats.isVideoStat()
+        } ?: return null
+    val members = outboundVideoStat.members
+    return VideoEncoderStatsSample(
+        timestampUs = outboundVideoStat.timestampUs.toLong(),
+        framesEncoded = members["framesEncoded"].asLong(),
+        framesPerSecond = members["framesPerSecond"].asDouble(),
+        qualityLimitationReason = members["qualityLimitationReason"].asString(),
+    )
+}
+
+private fun org.webrtc.RTCStats.isVideoStat(): Boolean {
+    val kind = members["kind"].asString()
+    val mediaType = members["mediaType"].asString()
+    return kind.equals("video", ignoreCase = true) || mediaType.equals("video", ignoreCase = true)
+}
+
+private fun Any?.asLong(): Long? =
+    when (this) {
+        is Long -> this
+        is Int -> toLong()
+        is Double -> toLong()
+        is Float -> toLong()
+        is Number -> toLong()
+        is String -> toLongOrNull()
+        else -> null
+    }
+
+private fun Any?.asDouble(): Double? =
+    when (this) {
+        is Double -> this
+        is Float -> toDouble()
+        is Long -> toDouble()
+        is Int -> toDouble()
+        is Number -> toDouble()
+        is String -> toDoubleOrNull()
+        else -> null
+    }
+
+private fun Any?.asString(): String? =
+    when (this) {
+        is String -> this
+        else -> null
     }

@@ -2,6 +2,8 @@ package io.relavr.sender.app
 
 import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CodecPreference
+import io.relavr.sender.core.model.VideoResolution
+import io.relavr.sender.core.model.VideoStreamProfile
 import io.relavr.sender.testing.fakes.FakeCodecCapabilityRepository
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -26,6 +28,27 @@ class CombinedCodecCapabilityRepositoryTest {
                                         ),
                                     audioPlaybackCaptureSupported = true,
                                     defaultCodec = CodecPreference.H264,
+                                    supportedProfiles =
+                                        setOf(
+                                            VideoStreamProfile(
+                                                codecPreference = CodecPreference.H264,
+                                                resolution = VideoResolution(width = 1280, height = 720),
+                                                fps = 30,
+                                                bitrateKbps = 4000,
+                                            ),
+                                            VideoStreamProfile(
+                                                codecPreference = CodecPreference.HEVC,
+                                                resolution = VideoResolution(width = 1920, height = 1080),
+                                                fps = 60,
+                                                bitrateKbps = 8000,
+                                            ),
+                                            VideoStreamProfile(
+                                                codecPreference = CodecPreference.VP9,
+                                                resolution = VideoResolution(width = 1280, height = 720),
+                                                fps = 30,
+                                                bitrateKbps = 4000,
+                                            ),
+                                        ),
                                 ),
                         ),
                     webRtcCodecSupportProvider = {
@@ -38,6 +61,23 @@ class CombinedCodecCapabilityRepositoryTest {
             assertEquals(
                 setOf(CodecPreference.H264, CodecPreference.VP9),
                 capabilities.supportedCodecs,
+            )
+            assertEquals(
+                setOf(
+                    VideoStreamProfile(
+                        codecPreference = CodecPreference.H264,
+                        resolution = VideoResolution(width = 1280, height = 720),
+                        fps = 30,
+                        bitrateKbps = 4000,
+                    ),
+                    VideoStreamProfile(
+                        codecPreference = CodecPreference.VP9,
+                        resolution = VideoResolution(width = 1280, height = 720),
+                        fps = 30,
+                        bitrateKbps = 4000,
+                    ),
+                ),
+                capabilities.supportedProfiles,
             )
             assertEquals(CodecPreference.H264, capabilities.defaultCodec)
             assertTrue(capabilities.audioPlaybackCaptureSupported)

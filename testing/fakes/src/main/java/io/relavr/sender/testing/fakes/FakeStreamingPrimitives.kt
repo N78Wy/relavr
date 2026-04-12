@@ -228,14 +228,17 @@ class FakeRtcPublisherFactory(
 ) : RtcPublisherFactory {
     var createCount: Int = 0
     var lastConfig: StreamConfig? = null
+    var lastCapabilities: CapabilitySnapshot? = null
     var lastSignalingSession: SignalingSession? = null
 
     override suspend fun createSession(
         config: StreamConfig,
+        capabilities: CapabilitySnapshot,
         signalingSession: SignalingSession,
     ): RtcPublishSession {
         createCount += 1
         lastConfig = config
+        lastCapabilities = capabilities
         lastSignalingSession = signalingSession
         return session
     }
@@ -285,6 +288,7 @@ class FakeStreamingSessionController(
             state.value.copy(
                 audioState = AudioStreamState.Disabled,
                 resolvedConfig = config,
+                activeVideoProfile = config.toVideoStreamProfile(),
                 statusDetail = UiText.of(io.relavr.sender.core.model.R.string.sender_status_default_idle),
             )
     }

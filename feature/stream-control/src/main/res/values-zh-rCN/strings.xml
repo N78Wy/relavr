@@ -46,6 +46,7 @@
     <string name="stream_control_ice_hint">ICE 默认使用 Google STUN，可在后续阶段扩展 TURN / 鉴权。</string>
     <string name="stream_control_profile_title">推流规格</string>
     <string name="stream_control_profile_summary">%1$s / %2$s FPS / %3$s kbps</string>
+    <string name="stream_control_profile_summary_requested_and_active">请求规格：%1$s / %2$s FPS / %3$s kbps；当前规格：%4$s / %5$s FPS / %6$s kbps。</string>
     <string name="stream_control_start_button">开始推流</string>
     <string name="stream_control_stop_button">停止推流</string>
     <string name="stream_control_audio_switch_label">开启音频采集</string>

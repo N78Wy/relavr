@@ -16,7 +16,7 @@ data class StreamConfig(
     val trimmedSignalingEndpoint: String = signalingEndpoint.trim()
     val trimmedSessionId: String = sessionId.trim()
 
-    fun validationError(): SenderError.InvalidConfig? {
+    fun validationError(capabilities: CapabilitySnapshot? = null): SenderError.InvalidConfig? {
         if (!videoEnabled) {
             return SenderError.InvalidConfig(
                 message = "Video streaming must remain enabled in this version.",
@@ -69,8 +69,16 @@ data class StreamConfig(
                 uiText = UiText.of(R.string.sender_error_signaling_endpoint_scheme_invalid),
             )
         }
+        if (capabilities != null && !capabilities.supports(toVideoStreamProfile())) {
+            return SenderError.InvalidConfig(
+                message = "The selected codec and stream profile are not supported together.",
+                uiText = UiText.of(R.string.sender_error_profile_unsupported),
+            )
+        }
         return null
     }
+
+    fun toVideoStreamProfile(): VideoStreamProfile = VideoStreamProfile.from(this)
 
     companion object {
         val DEFAULT_RESOLUTION = VideoResolution(width = 1280, height = 720)

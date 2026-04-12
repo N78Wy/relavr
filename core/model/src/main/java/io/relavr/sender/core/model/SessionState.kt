@@ -30,6 +30,7 @@ data class StreamingSessionSnapshot(
     val audioState: AudioStreamState = AudioStreamState.Disabled,
     val audioDetail: UiText? = null,
     val resolvedConfig: StreamConfig? = null,
+    val activeVideoProfile: VideoStreamProfile? = null,
     val capabilities: CapabilitySnapshot? = null,
     val codecSelection: CodecSelection? = null,
     val statusDetail: UiText? = null,

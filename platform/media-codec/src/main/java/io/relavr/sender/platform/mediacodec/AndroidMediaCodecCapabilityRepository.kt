@@ -18,20 +18,39 @@ class AndroidMediaCodecCapabilityRepository(
                     .codecInfos
                     .filter { it.isEncoder }
 
-            val supportedCodecs =
-                CodecPreference.entries
-                    .filter { preference ->
-                        codecInfos.any { codecInfo ->
+            val supportByCodec =
+                CodecPreference.entries.associateWith { preference ->
+                    codecInfos
+                        .filter { codecInfo ->
                             codecInfo.supportedTypes.any { type ->
                                 type.equals(preference.mimeType, ignoreCase = true)
                             }
+                        }.mapNotNull { codecInfo ->
+                            runCatching {
+                                val videoCapabilities = codecInfo.getCapabilitiesForType(preference.mimeType).videoCapabilities
+                                VideoProfileSupportProbe(
+                                    supportsSizeAndRate = { width, height, fps ->
+                                        videoCapabilities.areSizeAndRateSupported(
+                                            width,
+                                            height,
+                                            fps.toDouble(),
+                                        )
+                                    },
+                                    supportsBitrateBps = { bitrateBps ->
+                                        videoCapabilities.bitrateRange.contains(bitrateBps)
+                                    },
+                                )
+                            }.getOrNull()
                         }
-                    }.toSet()
+                }
+            val supportedProfiles = resolveSupportedProfiles(supportByCodec)
+            val supportedCodecs = supportedProfiles.mapTo(linkedSetOf()) { profile -> profile.codecPreference }
 
             CapabilitySnapshot(
                 supportedCodecs = supportedCodecs,
                 audioPlaybackCaptureSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q,
                 defaultCodec = CapabilitySnapshot.resolveDefaultCodec(supportedCodecs),
+                supportedProfiles = supportedProfiles,
             )
         }
 }

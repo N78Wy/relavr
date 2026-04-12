@@ -9,6 +9,7 @@ import io.relavr.sender.core.model.CodecSelection
 import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.UiText
+import io.relavr.sender.core.model.VideoStreamProfile
 import kotlinx.coroutines.flow.Flow
 import java.io.Closeable
 import java.nio.ByteBuffer
@@ -127,6 +128,15 @@ sealed interface RtcSessionEvent {
         val detail: UiText,
     ) : RtcSessionEvent
 
+    data class VideoProfileChanged(
+        val activeProfile: VideoStreamProfile,
+        val detail: UiText,
+    ) : RtcSessionEvent
+
+    data class VideoEncoderOverloaded(
+        val error: SenderError.VideoEncoderOverloaded,
+    ) : RtcSessionEvent
+
     data object Disconnected : RtcSessionEvent
 }
 
@@ -147,6 +157,7 @@ interface RtcPublishSession : Closeable {
 fun interface RtcPublisherFactory {
     suspend fun createSession(
         config: StreamConfig,
+        capabilities: CapabilitySnapshot,
         signalingSession: SignalingSession,
     ): RtcPublishSession
 }

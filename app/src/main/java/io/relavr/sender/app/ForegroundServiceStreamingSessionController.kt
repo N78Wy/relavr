@@ -51,6 +51,7 @@ internal class ForegroundServiceStreamingSessionController(
                     } else {
                         AudioStreamState.Disabled
                     },
+                activeVideoProfile = null,
                 statusDetail = UiText.of(io.relavr.sender.core.model.R.string.sender_status_starting_foreground_service),
                 error = null,
             )
@@ -122,6 +123,7 @@ internal class ForegroundServiceStreamingSessionController(
                 captureState = CaptureState.Error,
                 publishState = PublishState.Error,
                 resolvedConfig = null,
+                activeVideoProfile = null,
                 codecSelection = null,
                 statusDetail = error.uiText,
                 error = error,

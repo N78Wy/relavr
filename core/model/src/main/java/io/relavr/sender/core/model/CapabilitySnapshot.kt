@@ -4,8 +4,18 @@ data class CapabilitySnapshot(
     val supportedCodecs: Set<CodecPreference>,
     val audioPlaybackCaptureSupported: Boolean,
     val defaultCodec: CodecPreference = CodecPreference.H264,
+    val supportedProfiles: Set<VideoStreamProfile> = emptySet(),
 ) {
     fun supports(codecPreference: CodecPreference): Boolean = codecPreference in supportedCodecs
+
+    fun supports(profile: VideoStreamProfile): Boolean =
+        when {
+            profile.codecPreference !in supportedCodecs -> false
+            supportedProfiles.isEmpty() -> true
+            else -> profile in supportedProfiles
+        }
+
+    fun supports(config: StreamConfig): Boolean = supports(config.toVideoStreamProfile())
 
     companion object {
         fun resolveDefaultCodec(supportedCodecs: Set<CodecPreference>): CodecPreference =

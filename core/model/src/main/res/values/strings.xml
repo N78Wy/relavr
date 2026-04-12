@@ -8,11 +8,13 @@
     <string name="sender_error_resolution_unsupported">The selected resolution is not supported.</string>
     <string name="sender_error_fps_unsupported">The selected frame rate is not supported.</string>
     <string name="sender_error_bitrate_unsupported">The selected bitrate is not supported.</string>
+    <string name="sender_error_profile_unsupported">The selected codec and stream profile are not supported together on this device.</string>
     <string name="sender_error_signaling_endpoint_invalid">The WebSocket endpoint format is invalid.</string>
     <string name="sender_error_signaling_endpoint_scheme_invalid">The WebSocket endpoint must use ws:// or wss://.</string>
     <string name="sender_error_audio_capture_unavailable">System audio capture is unavailable on this device.</string>
     <string name="sender_error_signaling_failed">The signaling connection failed.</string>
     <string name="sender_error_peer_connection_failed">The WebRTC connection failed.</string>
+    <string name="sender_error_video_encoder_overloaded">The video encoder remained overloaded after automatic downgrades.</string>
     <string name="sender_error_capture_interrupted">Screen capture was interrupted.</string>
     <string name="sender_error_session_start_failed">The streaming session could not be started.</string>
     <string name="sender_error_session_stop_failed">The streaming session could not be stopped cleanly.</string>
@@ -33,6 +35,7 @@
     <string name="sender_status_checking_ice">Establishing the ICE connection.</string>
     <string name="sender_status_connected_webrtc">WebRTC connected.</string>
     <string name="sender_status_applying_remote_answer">Applying the remote answer.</string>
+    <string name="sender_status_video_profile_downgraded">Encoder overload detected. Reduced to %1$s / %2$d FPS / %3$d kbps.</string>
     <string name="sender_audio_degraded_video_only">Audio capture degraded. Continuing with video only.</string>
     <string name="sender_status_default_idle">Ready to start streaming.</string>
     <string name="sender_status_permission_requested">Permission requested. Complete the system dialog to continue.</string>

@@ -11,6 +11,7 @@
 `workflow/done/260412-persist-stream-control-config.md` - 已为发送控制台增加本地配置自动保存与恢复，记录持久化边界、DataStore 落地与验收结果。
 `workflow/done/260412-bilingualize-code-and-ui.md` - 已完成双仓实现层英文化、Android / 浏览器页双语接入、应用内语言切换与验收。
 `workflow/done/260412-remove-mdns-discovery.md` - 已移除 sender 侧全部 mDNS discovery 代码、控制台 UI、模块依赖与当前记忆。
+`workflow/done/260412-fix-video-encoder-backpressure.md` - 已为 sender 增加视频规格支持矩阵、运行时编码过载自动降档与最低档失败保护，记录背压根因判断、状态同步与验证结果。
 `workflow/done/260412-fix-reconnect-after-first-session.md` - 修复首次推流结束后 receiver 被旧 ICE 打进错误态，导致第二次 sender 连接直接被拒绝的问题。
 `workflow/done/260411-fix-discovery-signaling-endpoint.md` - 修复 sender 通过 mDNS 发现 receiver 后使用错误 signaling 端口导致的连接被拒绝问题，并记录双仓对齐策略。
 `workflow/done/260411-sender-lan-discovery-connect.md` - 已为 Quest 3 sender 增加局域网 mDNS 发现、接收端选择与确认连接入口，并记录发现协议镜像、UI 交互与验证结果。
@@ -34,5 +35,6 @@
 - 首阶段 sender 建链协议固定为 `WebSocket + JSON Offer/Answer`，发送控制台必须提供 `signalingEndpoint` 与 `sessionId` 输入。
 - sender 扫码自动连接当前固定镜像 `relavr-view` 的 `receiver-connect v2` 协议，载荷包含 `scheme/path`；扫码后必须精确恢复二维码里的完整 `ws/wss` signaling 地址。
 - sender 音频默认开启，固定通过 `AudioPlaybackCapture` 采集系统播放音频；首次进入默认开启且未授权时必须自动请求 `RECORD_AUDIO`，用户再次手动打开音频开关时也必须继续重试授权；如果用户已经选择“拒绝且不再提醒”，发送控制台必须改为提供系统设置恢复入口，并依赖本地“已请求过权限”标记区分首次未请求与永久拒绝；若缺少 `RECORD_AUDIO`、设备不支持或运行时读取失败，必须降级为仅视频/静音而不能打断推流会话。
+- sender 视频规格继续允许在开播前自由选择，但运行时必须区分用户请求的 requested profile 与实际生效的 active profile；若检测到硬编持续过载，允许在同一会话内按预设梯度自动降档，并在最低档仍无法稳定时主动结束会话，避免编码积压导致 OOM。
 - 提交前必须至少执行 `./gradlew spotlessCheck`、`./gradlew lintDebug`、`./gradlew testDebugUnitTest`。
 - 如改动 `demo/browser-preview`，还必须执行 `npm run format:check`、`npm run lint`、`npm run test`。
