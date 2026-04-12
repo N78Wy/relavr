@@ -5,6 +5,7 @@
 `android/architecture.md` - 多模块边界、依赖方向、构建约束与测试基线；修改模块结构或公共接口时必读。
 
 ## 已完成任务文档
+`workflow/done/260412-persist-stream-control-config.md` - 已为发送控制台增加本地配置自动保存与恢复，记录持久化边界、DataStore 落地与验收结果。
 `workflow/done/260412-bilingualize-code-and-ui.md` - 已完成双仓实现层英文化、Android / 浏览器页双语接入、应用内语言切换与验收。
 `workflow/done/260412-remove-mdns-discovery.md` - 已移除 sender 侧全部 mDNS discovery 代码、控制台 UI、模块依赖与当前记忆。
 `workflow/done/260412-fix-reconnect-after-first-session.md` - 修复首次推流结束后 receiver 被旧 ICE 打进错误态，导致第二次 sender 连接直接被拒绝的问题。

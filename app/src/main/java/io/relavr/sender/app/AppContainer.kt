@@ -46,6 +46,7 @@ class AppContainer(
 
     private val foregroundServiceCommandDispatcher =
         AndroidForegroundServiceCommandDispatcher(application)
+    private val streamControlConfigStore = createStreamControlConfigStore(application)
 
     private val sessionController: StreamingSessionController =
         ForegroundServiceStreamingSessionController(
@@ -59,5 +60,6 @@ class AppContainer(
     val streamControlViewModelFactory =
         StreamControlViewModelFactory(
             sessionController = sessionController,
+            configStore = streamControlConfigStore,
         )
 }

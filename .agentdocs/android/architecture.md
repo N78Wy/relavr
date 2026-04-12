@@ -29,6 +29,7 @@
 - sender 侧 WebRTC 建链固定走 `WebSocket + JSON Offer/Answer` 协议，消息类型只包含 `join`、`offer`、`answer`、`ice-candidate`、`leave`、`error` 六类。
 - sender 既然固定依赖 WebSocket 信令、WebRTC 网络状态监测与系统播放音频采集，`app` manifest 必须同时声明 `android.permission.INTERNET`、`android.permission.ACCESS_NETWORK_STATE` 与 `android.permission.RECORD_AUDIO`；缺少前两者会直接导致建链或网络监测失败，缺少后者则必须走视频-only 降级。
 - 发送控制台固定开放 `signalingEndpoint`、`sessionId`、编码选择、分辨率、帧率、码率与音频开关；编码和视频规格都只能在开播前修改。规格候选当前固定为 `1280x720 / 1600x900 / 1920x1080`、`24 / 30 / 45 / 60 FPS`、`2000 / 4000 / 6000 / 8000 kbps`，默认值为 `1280x720 / 30 FPS / 4000 kbps`。编码默认优先 H.264，并且只展示设备 MediaCodec 与 libwebrtc 交集后的可用编码。若用户未关闭音频，开始推流前必须先由 `app` 层预检 `RECORD_AUDIO` 运行时权限，但即使用户拒绝，也只能降级为仅视频，不能直接中断整个会话。
+- 发送控制台的可编辑配置必须统一通过 `feature/stream-control` 暴露的 `StreamControlConfigStore` 接缝加载和保存；`feature` 只依赖抽象，具体持久化固定由 `app` 层 `DataStore` 实现，禁止在 `feature` 直接访问 `DataStore`、`SharedPreferences` 等 Android 存储 API。
 - Quest 主界面必须同时提供自由窗口默认尺寸提示和 Compose 响应式布局兜底：`MainActivity` 通过 manifest `layout` 指定平板级默认宽度与最小宽度，发送控制台在 `<600dp`、`600-839dp`、`>=840dp` 三档宽度下分别切换为紧凑单列、居中单列和宽屏双列，避免 VR 设备上出现手机式窄栏布局。
 - sender 真实音频固定通过同一 `MediaProjection` 会话上的 `AudioPlaybackCapture + JavaAudioDeviceModule.AudioBufferCallback` 接入 WebRTC，不允许回退到麦克风采集或额外实现独立混音链路。
 - 所有会实例化 `DefaultVideoEncoderFactory`、`PeerConnectionFactory` 或其他直接进入 `org.webrtc` native 方法的实现，都必须先复用共享 `WebRtcLibraryInitializer` 执行一次性初始化；禁止把 `PeerConnectionFactory.initialize(...)` 藏在单个调用点的私有细节里并假设其他路径不会提前访问 JNI。

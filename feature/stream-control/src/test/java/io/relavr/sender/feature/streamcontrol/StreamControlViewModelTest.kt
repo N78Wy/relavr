@@ -7,6 +7,7 @@ import io.relavr.sender.core.model.ReceiverConnectionInfo
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.VideoResolution
 import io.relavr.sender.testing.fakes.FakeStreamingSessionController
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -36,30 +37,116 @@ class StreamControlViewModelTest {
     }
 
     @Test
-    fun `initialization loads capabilities and updates the configuration`() =
+    fun `initialization restores the persisted configuration`() =
         runTest(dispatcher.scheduler) {
             val controller = FakeStreamingSessionController()
-            val viewModel = StreamControlViewModel(sessionController = controller)
+            val configStore =
+                FakeStreamControlConfigStore(
+                    initialConfig =
+                        StreamConfig(
+                            signalingEndpoint = "wss://signal.example/ws",
+                            sessionId = "saved-room",
+                            codecPreference = CodecPreference.HEVC,
+                            resolution = VideoResolution(width = 1920, height = 1080),
+                            fps = 60,
+                            bitrateKbps = 8000,
+                            audioEnabled = false,
+                        ),
+                )
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = controller,
+                    configStore = configStore,
+                )
 
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
-            assertEquals(CodecPreference.H264, state.codecOptions.single { it.selected }.preference)
+            assertEquals(CodecPreference.HEVC, state.codecOptions.single { it.selected }.preference)
             assertTrue(state.codecOptions.any { it.preference == CodecPreference.HEVC && it.enabled })
-            assertEquals(StreamConfig.DEFAULT_RESOLUTION, state.resolutionOptions.single { it.selected }.value)
-            assertEquals(StreamConfig.DEFAULT_FPS, state.fpsOptions.single { it.selected }.value)
-            assertEquals(StreamConfig.DEFAULT_BITRATE_KBPS, state.bitrateOptions.single { it.selected }.value)
-            assertEquals("", state.signalingEndpoint)
-            assertTrue(state.sessionId.isNotBlank())
-            assertTrue(state.audioEnabled)
-            assertFalse(state.startEnabled)
+            assertEquals(VideoResolution(width = 1920, height = 1080), state.resolutionOptions.single { it.selected }.value)
+            assertEquals(60, state.fpsOptions.single { it.selected }.value)
+            assertEquals(8000, state.bitrateOptions.single { it.selected }.value)
+            assertEquals("wss://signal.example/ws", state.signalingEndpoint)
+            assertEquals("saved-room", state.sessionId)
+            assertFalse(state.audioEnabled)
+            assertTrue(state.startEnabled)
+        }
+
+    @Test
+    fun `local edits are not overwritten when persisted config finishes loading later`() =
+        runTest(dispatcher.scheduler) {
+            val controller = FakeStreamingSessionController()
+            val loadGate = CompletableDeferred<Unit>()
+            val configStore =
+                FakeStreamControlConfigStore(
+                    initialConfig =
+                        StreamConfig(
+                            signalingEndpoint = "ws://persisted.example/ws",
+                            sessionId = "persisted-room",
+                        ),
+                    loadGate = loadGate,
+                )
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = controller,
+                    configStore = configStore,
+                )
+
+            viewModel.onSignalingEndpointChanged("ws://draft.example/ws")
+            viewModel.onSessionIdChanged("draft-room")
+            advanceUntilIdle()
+
+            loadGate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals("ws://draft.example/ws", viewModel.uiState.value.signalingEndpoint)
+            assertEquals("draft-room", viewModel.uiState.value.sessionId)
+        }
+
+    @Test
+    fun `config changes are persisted immediately`() =
+        runTest(dispatcher.scheduler) {
+            val controller = FakeStreamingSessionController()
+            val configStore = FakeStreamControlConfigStore()
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = controller,
+                    configStore = configStore,
+                )
+
+            viewModel.onSignalingEndpointChanged("wss://signal.example/ws")
+            viewModel.onSessionIdChanged("room-42")
+            viewModel.onCodecPreferenceChanged(CodecPreference.HEVC)
+            viewModel.onResolutionChanged(VideoResolution(width = 1920, height = 1080))
+            viewModel.onFpsChanged(60)
+            viewModel.onBitrateChanged(8000)
+            viewModel.onAudioEnabledChanged(false)
+            advanceUntilIdle()
+
+            assertEquals(
+                StreamConfig(
+                    signalingEndpoint = "wss://signal.example/ws",
+                    sessionId = "room-42",
+                    codecPreference = CodecPreference.HEVC,
+                    resolution = VideoResolution(width = 1920, height = 1080),
+                    fps = 60,
+                    bitrateKbps = 8000,
+                    audioEnabled = false,
+                ),
+                configStore.storedConfig,
+            )
         }
 
     @Test
     fun `starting a stream forwards the user supplied signaling configuration`() =
         runTest(dispatcher.scheduler) {
             val controller = FakeStreamingSessionController()
-            val viewModel = StreamControlViewModel(sessionController = controller)
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = controller,
+                    configStore = FakeStreamControlConfigStore(),
+                )
 
             viewModel.onSignalingEndpointChanged("wss://signal.example/ws")
             viewModel.onSessionIdChanged("room-42")
@@ -84,7 +171,12 @@ class StreamControlViewModelTest {
     fun `a successful qr scan autofills the connection info and starts streaming immediately`() =
         runTest(dispatcher.scheduler) {
             val controller = FakeStreamingSessionController()
-            val viewModel = StreamControlViewModel(sessionController = controller)
+            val configStore = FakeStreamControlConfigStore()
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = controller,
+                    configStore = configStore,
+                )
             val payload =
                 ReceiverConnectPayloadCodec.encode(
                     ReceiverConnectionInfo(
@@ -112,6 +204,8 @@ class StreamControlViewModelTest {
             assertEquals(60, controller.lastStartConfig?.fps)
             assertEquals(8000, controller.lastStartConfig?.bitrateKbps)
             assertFalse(controller.lastStartConfig?.audioEnabled ?: true)
+            assertEquals("ws://192.168.50.20:17888", configStore.storedConfig.signalingEndpoint)
+            assertEquals("receiver-room", configStore.storedConfig.sessionId)
             assertTrue(
                 viewModel.uiState.value.scanStatusLabel.args
                     .contains("Living Room"),
@@ -122,7 +216,12 @@ class StreamControlViewModelTest {
     fun `an invalid qr code does not overwrite config or trigger streaming`() =
         runTest(dispatcher.scheduler) {
             val controller = FakeStreamingSessionController()
-            val viewModel = StreamControlViewModel(sessionController = controller)
+            val configStore = FakeStreamControlConfigStore()
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = controller,
+                    configStore = configStore,
+                )
 
             viewModel.onSignalingEndpointChanged("ws://keep.example/ws")
             viewModel.onSessionIdChanged("keep-room")
@@ -132,11 +231,13 @@ class StreamControlViewModelTest {
             assertEquals(0, controller.startCount)
             assertEquals("ws://keep.example/ws", viewModel.uiState.value.signalingEndpoint)
             assertEquals("keep-room", viewModel.uiState.value.sessionId)
+            assertEquals("ws://keep.example/ws", configStore.storedConfig.signalingEndpoint)
+            assertEquals("keep-room", configStore.storedConfig.sessionId)
             assertEquals(R.string.stream_control_scan_parse_failed, viewModel.uiState.value.scanStatusLabel.resId)
         }
 
     @Test
-    fun `capability refresh normalizes unsupported codecs to the device default`() =
+    fun `capability refresh normalizes unsupported codecs to the device default and persists it`() =
         runTest(dispatcher.scheduler) {
             val controller =
                 FakeStreamingSessionController(
@@ -147,9 +248,14 @@ class StreamControlViewModelTest {
                             defaultCodec = CodecPreference.HEVC,
                         ),
                 )
+            val configStore =
+                FakeStreamControlConfigStore(
+                    initialConfig = StreamConfig(codecPreference = CodecPreference.VP9),
+                )
             val viewModel =
                 StreamControlViewModel(
                     sessionController = controller,
+                    configStore = configStore,
                     initialConfig = StreamConfig(codecPreference = CodecPreference.VP9),
                 )
 
@@ -159,5 +265,23 @@ class StreamControlViewModelTest {
             assertEquals(CodecPreference.HEVC, state.codecOptions.single { it.selected }.preference)
             assertEquals(R.string.stream_control_codec_device_default, state.codecStatusLabel.resId)
             assertEquals(listOf(CodecPreference.HEVC.displayName), state.codecStatusLabel.args)
+            assertEquals(CodecPreference.HEVC, configStore.storedConfig.codecPreference)
         }
+
+    private class FakeStreamControlConfigStore(
+        initialConfig: StreamConfig = StreamConfig(),
+        private val loadGate: CompletableDeferred<Unit>? = null,
+    ) : StreamControlConfigStore {
+        var storedConfig: StreamConfig = initialConfig
+            private set
+
+        override suspend fun load(): StreamConfig {
+            loadGate?.await()
+            return storedConfig
+        }
+
+        override suspend fun save(config: StreamConfig) {
+            storedConfig = config
+        }
+    }
 }

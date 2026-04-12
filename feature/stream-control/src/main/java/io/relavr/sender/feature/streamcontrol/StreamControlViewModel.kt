@@ -22,10 +22,12 @@ import kotlinx.coroutines.launch
 
 class StreamControlViewModel(
     private val sessionController: StreamingSessionController,
+    private val configStore: StreamControlConfigStore,
     initialConfig: StreamConfig = StreamConfig(),
 ) : ViewModel() {
     private val config = MutableStateFlow(initialConfig)
     private val qrScannerState = MutableStateFlow(QrScannerState())
+    private var hasLocalEdits = false
 
     val uiState: StateFlow<StreamControlUiState> =
         combine(
@@ -51,6 +53,12 @@ class StreamControlViewModel(
 
     init {
         viewModelScope.launch {
+            val persistedConfig =
+                runCatching { configStore.load() }
+                    .getOrDefault(initialConfig)
+            if (!hasLocalEdits) {
+                config.value = persistedConfig
+            }
             sessionController.refreshCapabilities()
         }
         viewModelScope.launch {
@@ -62,37 +70,40 @@ class StreamControlViewModel(
                     if (capabilities == null || capabilities.supportedCodecs.isEmpty()) {
                         return@collect
                     }
-                    config.update { current ->
-                        if (capabilities.supports(current.codecPreference)) {
-                            current
-                        } else {
-                            current.copy(codecPreference = capabilities.defaultCodec)
-                        }
+                    val currentConfig = config.value
+                    if (capabilities.supports(currentConfig.codecPreference)) {
+                        return@collect
                     }
+                    updateConfig(
+                        markAsLocalEdit = false,
+                        transform = { current ->
+                            current.copy(codecPreference = capabilities.defaultCodec)
+                        },
+                    )
                 }
         }
     }
 
     fun onSignalingEndpointChanged(endpoint: String) {
-        config.update { current ->
+        updateConfig { current ->
             current.copy(signalingEndpoint = endpoint)
         }
     }
 
     fun onSessionIdChanged(sessionId: String) {
-        config.update { current ->
+        updateConfig { current ->
             current.copy(sessionId = sessionId)
         }
     }
 
     fun onCodecPreferenceChanged(codecPreference: CodecPreference) {
-        config.update { current ->
+        updateConfig { current ->
             current.copy(codecPreference = codecPreference)
         }
     }
 
     fun onAudioEnabledChanged(enabled: Boolean) {
-        config.update { current ->
+        updateConfig { current ->
             current.copy(audioEnabled = enabled)
         }
     }
@@ -128,7 +139,7 @@ class StreamControlViewModel(
                 signalingEndpoint = connectionInfo.webSocketUrl,
                 sessionId = connectionInfo.sessionId,
             )
-        config.value = updatedConfig
+        updateConfig(updatedConfig)
 
         qrScannerState.value =
             QrScannerState(
@@ -142,19 +153,19 @@ class StreamControlViewModel(
     }
 
     fun onResolutionChanged(resolution: VideoResolution) {
-        config.update { current ->
+        updateConfig { current ->
             current.copy(resolution = resolution)
         }
     }
 
     fun onFpsChanged(fps: Int) {
-        config.update { current ->
+        updateConfig { current ->
             current.copy(fps = fps)
         }
     }
 
     fun onBitrateChanged(bitrateKbps: Int) {
-        config.update { current ->
+        updateConfig { current ->
             current.copy(bitrateKbps = bitrateKbps)
         }
     }
@@ -170,14 +181,52 @@ class StreamControlViewModel(
             sessionController.stop()
         }
     }
+
+    private fun updateConfig(
+        updatedConfig: StreamConfig,
+        markAsLocalEdit: Boolean = true,
+        persist: Boolean = true,
+    ) {
+        if (updatedConfig == config.value) {
+            return
+        }
+        if (markAsLocalEdit) {
+            hasLocalEdits = true
+        }
+        config.value = updatedConfig
+        if (persist) {
+            persistConfig(updatedConfig)
+        }
+    }
+
+    private fun updateConfig(
+        markAsLocalEdit: Boolean = true,
+        persist: Boolean = true,
+        transform: (StreamConfig) -> StreamConfig,
+    ) {
+        val currentConfig = config.value
+        updateConfig(
+            updatedConfig = transform(currentConfig),
+            markAsLocalEdit = markAsLocalEdit,
+            persist = persist,
+        )
+    }
+
+    private fun persistConfig(updatedConfig: StreamConfig) {
+        viewModelScope.launch {
+            runCatching { configStore.save(updatedConfig) }
+        }
+    }
 }
 
 class StreamControlViewModelFactory(
     private val sessionController: StreamingSessionController,
+    private val configStore: StreamControlConfigStore,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
         StreamControlViewModel(
             sessionController = sessionController,
+            configStore = configStore,
         ) as T
 }
