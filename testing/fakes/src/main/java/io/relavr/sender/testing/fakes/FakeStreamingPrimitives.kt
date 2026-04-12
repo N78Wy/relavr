@@ -1,7 +1,6 @@
 package io.relavr.sender.testing.fakes
 
 import io.relavr.sender.core.common.AppLogger
-import io.relavr.sender.core.model.AudioStreamState
 import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.CodecSelection
@@ -9,15 +8,11 @@ import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
 import io.relavr.sender.core.model.UiText
-import io.relavr.sender.core.session.AudioCaptureSource
-import io.relavr.sender.core.session.AudioCaptureSourceFactory
-import io.relavr.sender.core.session.AudioFrameReadResult
 import io.relavr.sender.core.session.CodecCapabilityRepository
 import io.relavr.sender.core.session.CodecPolicy
 import io.relavr.sender.core.session.PermissionDeniedException
 import io.relavr.sender.core.session.ProjectionAccess
 import io.relavr.sender.core.session.ProjectionPermissionGateway
-import io.relavr.sender.core.session.PublishStartResult
 import io.relavr.sender.core.session.RtcPublishSession
 import io.relavr.sender.core.session.RtcPublisherFactory
 import io.relavr.sender.core.session.RtcSessionEvent
@@ -30,7 +25,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import java.nio.ByteBuffer
 
 class FakeProjectionAccess : ProjectionAccess {
     var closed: Boolean = false
@@ -58,64 +52,10 @@ class FakeProjectionPermissionGateway(
     override fun restoreIfAvailable(): ProjectionAccess? = restoredAccess
 }
 
-class FakeAudioCaptureSource(
-    override val sampleRateHz: Int = 48_000,
-    override val channelCount: Int = 2,
-) : AudioCaptureSource {
-    var closed: Boolean = false
-    var started: Boolean = false
-    var shouldReadFail: Boolean = false
-    var nextBytesRead: Int = 0
-    var nextTimestampNs: Long = 123L
-
-    override fun close() {
-        closed = true
-    }
-
-    override fun start(mediaProjection: android.media.projection.MediaProjection) {
-        started = true
-    }
-
-    override fun read(
-        targetBuffer: ByteBuffer,
-        requestedBytes: Int,
-    ): AudioFrameReadResult {
-        if (shouldReadFail) {
-            throw SenderException(SenderError.AudioCaptureUnavailable("fake-audio-read-failure"))
-        }
-        repeat(nextBytesRead.coerceAtMost(requestedBytes)) {
-            targetBuffer.put(0x01.toByte())
-        }
-        return AudioFrameReadResult(
-            bytesRead = nextBytesRead.coerceAtMost(requestedBytes),
-            timestampNs = nextTimestampNs,
-        )
-    }
-}
-
-class FakeAudioCaptureSourceFactory(
-    private val source: FakeAudioCaptureSource = FakeAudioCaptureSource(),
-) : AudioCaptureSourceFactory {
-    var createCount: Int = 0
-    var shouldFail: Boolean = false
-
-    override suspend fun create(
-        projectionAccess: ProjectionAccess,
-        config: StreamConfig,
-    ): AudioCaptureSource? {
-        createCount += 1
-        if (shouldFail) {
-            throw SenderException(SenderError.AudioCaptureUnavailable("fake-audio-failure"))
-        }
-        return source
-    }
-}
-
 class FakeCodecCapabilityRepository(
     var snapshot: CapabilitySnapshot =
         CapabilitySnapshot(
             supportedCodecs = setOf(CodecPreference.H264),
-            audioPlaybackCaptureSupported = true,
         ),
 ) : CodecCapabilityRepository {
     var requestCount: Int = 0
@@ -188,30 +128,15 @@ class FakeRtcPublishSession : RtcPublishSession {
     var closed: Boolean = false
     var shouldFail: Boolean = false
     var lastProjectionAccess: ProjectionAccess? = null
-    var lastAudioSource: AudioCaptureSource? = null
-    var nextPublishResult: PublishStartResult? = null
 
     override val events: Flow<RtcSessionEvent> = eventFlow
 
-    override suspend fun publish(
-        projectionAccess: ProjectionAccess,
-        audioSource: AudioCaptureSource?,
-    ): PublishStartResult {
+    override suspend fun publish(projectionAccess: ProjectionAccess) {
         if (shouldFail) {
             throw SenderException(SenderError.SessionStartFailed("fake-publish-failure"))
         }
         publishCount += 1
         lastProjectionAccess = projectionAccess
-        lastAudioSource = audioSource
-        return nextPublishResult
-            ?: PublishStartResult(
-                audioState =
-                    if (audioSource != null) {
-                        AudioStreamState.Publishing
-                    } else {
-                        AudioStreamState.Disabled
-                    },
-            )
     }
 
     fun emitEvent(event: RtcSessionEvent) {
@@ -267,7 +192,6 @@ class FakeStreamingSessionController(
     private val capabilitySnapshot: CapabilitySnapshot =
         CapabilitySnapshot(
             supportedCodecs = setOf(CodecPreference.H264, CodecPreference.HEVC),
-            audioPlaybackCaptureSupported = true,
         ),
 ) : StreamingSessionController {
     private val state = MutableStateFlow(initialState)
@@ -286,7 +210,6 @@ class FakeStreamingSessionController(
         lastStartConfig = config
         state.value =
             state.value.copy(
-                audioState = AudioStreamState.Disabled,
                 resolvedConfig = config,
                 activeVideoProfile = config.toVideoStreamProfile(),
                 statusDetail = UiText.of(io.relavr.sender.core.model.R.string.sender_status_default_idle),

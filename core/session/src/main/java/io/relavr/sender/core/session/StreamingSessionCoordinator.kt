@@ -2,7 +2,6 @@ package io.relavr.sender.core.session
 
 import io.relavr.sender.core.common.AppDispatchers
 import io.relavr.sender.core.common.AppLogger
-import io.relavr.sender.core.model.AudioStreamState
 import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.PublishState
@@ -27,7 +26,6 @@ import java.io.Closeable
 
 class StreamingSessionCoordinator(
     private val projectionPermissionGateway: ProjectionPermissionGateway,
-    private val audioCaptureSourceFactory: AudioCaptureSourceFactory,
     private val codecCapabilityRepository: CodecCapabilityRepository,
     private val codecPolicy: CodecPolicy,
     private val rtcPublisherFactory: RtcPublisherFactory,
@@ -71,13 +69,6 @@ class StreamingSessionCoordinator(
                 it.copy(
                     captureState = CaptureState.RequestingPermission,
                     publishState = PublishState.Preparing,
-                    audioState =
-                        if (config.audioEnabled) {
-                            AudioStreamState.Starting
-                        } else {
-                            AudioStreamState.Disabled
-                        },
-                    audioDetail = null,
                     statusDetail = UiText.of(R.string.sender_status_waiting_projection_permission),
                     error = null,
                 )
@@ -127,44 +118,6 @@ class StreamingSessionCoordinator(
                     )
                     return
                 }
-                var audioState =
-                    if (resolvedConfig.audioEnabled) {
-                        AudioStreamState.Starting
-                    } else {
-                        AudioStreamState.Disabled
-                    }
-                var audioDetail: UiText? = null
-
-                val audioSource =
-                    if (resolvedConfig.audioEnabled) {
-                        runCatching {
-                            withContext(dispatchers.io) {
-                                audioCaptureSourceFactory.create(projectionAccess, resolvedConfig)
-                            }
-                        }.onFailure { throwable ->
-                            val mappedError = mapError(throwable)
-                            if (mappedError !is SenderError.AudioCaptureUnavailable) {
-                                throw throwable
-                            }
-                            audioState = AudioStreamState.Degraded
-                            audioDetail = mappedError.uiText
-                            logger.error(
-                                TAG,
-                                "Audio capture initialization failed. Falling back to video-only streaming: ${mappedError.message}",
-                                throwable,
-                            )
-                        }.getOrNull()
-                            ?.also { resources += it }
-                    } else {
-                        null
-                    }
-
-                state.update {
-                    it.copy(
-                        audioState = audioState,
-                        audioDetail = audioDetail,
-                    )
-                }
 
                 state.update {
                     it.copy(statusDetail = UiText.of(R.string.sender_status_connecting_signaling))
@@ -190,23 +143,14 @@ class StreamingSessionCoordinator(
                 state.update {
                     it.copy(statusDetail = UiText.of(R.string.sender_status_preparing_video_track))
                 }
-                val publishResult =
-                    withContext(dispatchers.io) {
-                        publishSession.publish(projectionAccess, audioSource)
-                    }
-                val finalAudioState =
-                    if (audioState == AudioStreamState.Degraded) {
-                        AudioStreamState.Degraded
-                    } else {
-                        publishResult.audioState
-                    }
-                val finalAudioDetail = audioDetail ?: publishResult.audioDetail
+                withContext(dispatchers.io) {
+                    publishSession.publish(projectionAccess)
+                }
 
                 activeSession =
                     ActiveSession(
                         token = sessionToken,
                         projectionAccess = projectionAccess,
-                        audioSource = audioSource,
                         signalingSession = signalingSession,
                         publishSession = publishSession,
                         monitorJob = monitorJob,
@@ -216,18 +160,11 @@ class StreamingSessionCoordinator(
                     it.copy(
                         captureState = CaptureState.Capturing,
                         publishState = PublishState.Publishing,
-                        audioState = finalAudioState,
-                        audioDetail = finalAudioDetail,
                         resolvedConfig = resolvedConfig,
                         activeVideoProfile = resolvedConfig.toVideoStreamProfile(),
                         capabilities = capabilities,
                         codecSelection = selection,
-                        statusDetail =
-                            if (finalAudioState == AudioStreamState.Publishing) {
-                                UiText.of(R.string.sender_status_streaming_audio_video)
-                            } else {
-                                UiText.of(R.string.sender_status_streaming_video_only)
-                            },
+                        statusDetail = UiText.of(R.string.sender_status_streaming_video_only),
                         error = null,
                     )
                 }
@@ -248,20 +185,7 @@ class StreamingSessionCoordinator(
         sessionMutex.withLock {
             val currentSession =
                 activeSession ?: run {
-                    activeSessionToken = null
-                    state.update {
-                        it.copy(
-                            captureState = CaptureState.Idle,
-                            publishState = PublishState.Idle,
-                            audioState = AudioStreamState.Disabled,
-                            audioDetail = null,
-                            resolvedConfig = null,
-                            activeVideoProfile = null,
-                            codecSelection = null,
-                            statusDetail = null,
-                            error = null,
-                        )
-                    }
+                    resetToIdle()
                     return
                 }
 
@@ -279,25 +203,12 @@ class StreamingSessionCoordinator(
                 activeSessionToken = null
                 listOfNotNull(
                     currentSession.publishSession,
-                    currentSession.audioSource,
                     currentSession.signalingSession,
                     currentSession.projectionAccess,
                 ).closeAllQuietly()
 
                 activeSession = null
-                state.update {
-                    it.copy(
-                        captureState = CaptureState.Idle,
-                        publishState = PublishState.Idle,
-                        audioState = AudioStreamState.Disabled,
-                        audioDetail = null,
-                        resolvedConfig = null,
-                        activeVideoProfile = null,
-                        codecSelection = null,
-                        statusDetail = null,
-                        error = null,
-                    )
-                }
+                resetToIdle()
             } catch (throwable: Throwable) {
                 handleFailure(
                     error = SenderError.SessionStopFailed(throwable.message ?: "Stopping the streaming session failed."),
@@ -336,26 +247,6 @@ class StreamingSessionCoordinator(
                             sessionToken = sessionToken,
                             error = SenderError.CaptureInterrupted(event.reason),
                         )
-
-                    is RtcSessionEvent.AudioDegraded -> {
-                        if (activeSessionToken === sessionToken) {
-                            state.update { current ->
-                                current.copy(
-                                    audioState = AudioStreamState.Degraded,
-                                    audioDetail = event.detail,
-                                    statusDetail =
-                                        if (
-                                            current.captureState == CaptureState.Capturing &&
-                                            current.publishState == PublishState.Publishing
-                                        ) {
-                                            UiText.of(R.string.sender_status_streaming_video_only)
-                                        } else {
-                                            current.statusDetail
-                                        },
-                                )
-                            }
-                        }
-                    }
 
                     is RtcSessionEvent.VideoProfileChanged -> {
                         if (activeSessionToken === sessionToken) {
@@ -398,7 +289,6 @@ class StreamingSessionCoordinator(
             activeSessionToken = null
             listOfNotNull(
                 currentSession.publishSession,
-                currentSession.audioSource,
                 currentSession.signalingSession,
                 currentSession.projectionAccess,
             ).closeAllQuietly()
@@ -447,6 +337,21 @@ class StreamingSessionCoordinator(
         }
     }
 
+    private fun resetToIdle() {
+        activeSessionToken = null
+        state.update {
+            it.copy(
+                captureState = CaptureState.Idle,
+                publishState = PublishState.Idle,
+                resolvedConfig = null,
+                activeVideoProfile = null,
+                codecSelection = null,
+                statusDetail = null,
+                error = null,
+            )
+        }
+    }
+
     private fun mapError(throwable: Throwable): SenderError =
         when (throwable) {
             is PermissionDeniedException -> SenderError.PermissionDenied
@@ -458,7 +363,6 @@ class StreamingSessionCoordinator(
     private data class ActiveSession(
         val token: Any,
         val projectionAccess: ProjectionAccess,
-        val audioSource: AudioCaptureSource?,
         val signalingSession: SignalingSession,
         val publishSession: RtcPublishSession,
         val monitorJob: Job,

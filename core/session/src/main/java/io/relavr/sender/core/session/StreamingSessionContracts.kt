@@ -1,8 +1,6 @@
 package io.relavr.sender.core.session
 
 import android.content.Intent
-import android.media.projection.MediaProjection
-import io.relavr.sender.core.model.AudioStreamState
 import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.CodecSelection
@@ -12,7 +10,6 @@ import io.relavr.sender.core.model.UiText
 import io.relavr.sender.core.model.VideoStreamProfile
 import kotlinx.coroutines.flow.Flow
 import java.io.Closeable
-import java.nio.ByteBuffer
 
 data class MediaProjectionPermission(
     val resultCode: Int,
@@ -28,30 +25,6 @@ interface ProjectionPermissionGateway {
 
     fun restoreIfAvailable(): ProjectionAccess?
 }
-
-interface AudioCaptureSource : Closeable {
-    val sampleRateHz: Int
-    val channelCount: Int
-
-    fun start(mediaProjection: MediaProjection)
-
-    fun read(
-        targetBuffer: ByteBuffer,
-        requestedBytes: Int,
-    ): AudioFrameReadResult
-}
-
-fun interface AudioCaptureSourceFactory {
-    suspend fun create(
-        projectionAccess: ProjectionAccess,
-        config: StreamConfig,
-    ): AudioCaptureSource?
-}
-
-data class AudioFrameReadResult(
-    val bytesRead: Int,
-    val timestampNs: Long,
-)
 
 interface CodecCapabilityRepository {
     suspend fun getCapabilities(): CapabilitySnapshot
@@ -124,10 +97,6 @@ sealed interface RtcSessionEvent {
         val uiText: UiText = SenderError.CaptureInterrupted(reason).uiText,
     ) : RtcSessionEvent
 
-    data class AudioDegraded(
-        val detail: UiText,
-    ) : RtcSessionEvent
-
     data class VideoProfileChanged(
         val activeProfile: VideoStreamProfile,
         val detail: UiText,
@@ -140,18 +109,10 @@ sealed interface RtcSessionEvent {
     data object Disconnected : RtcSessionEvent
 }
 
-data class PublishStartResult(
-    val audioState: AudioStreamState,
-    val audioDetail: UiText? = null,
-)
-
 interface RtcPublishSession : Closeable {
     val events: Flow<RtcSessionEvent>
 
-    suspend fun publish(
-        projectionAccess: ProjectionAccess,
-        audioSource: AudioCaptureSource?,
-    ): PublishStartResult
+    suspend fun publish(projectionAccess: ProjectionAccess)
 }
 
 fun interface RtcPublisherFactory {

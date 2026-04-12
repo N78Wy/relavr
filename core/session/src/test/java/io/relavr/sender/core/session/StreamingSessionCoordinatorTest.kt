@@ -1,6 +1,5 @@
 package io.relavr.sender.core.session
 
-import io.relavr.sender.core.model.AudioStreamState
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.PublishState
@@ -10,8 +9,6 @@ import io.relavr.sender.core.model.UiText
 import io.relavr.sender.core.model.VideoResolution
 import io.relavr.sender.core.model.VideoStreamProfile
 import io.relavr.sender.testing.fakes.FakeAppLogger
-import io.relavr.sender.testing.fakes.FakeAudioCaptureSource
-import io.relavr.sender.testing.fakes.FakeAudioCaptureSourceFactory
 import io.relavr.sender.testing.fakes.FakeCodecCapabilityRepository
 import io.relavr.sender.testing.fakes.FakeCodecPolicy
 import io.relavr.sender.testing.fakes.FakeProjectionAccess
@@ -36,7 +33,6 @@ class StreamingSessionCoordinatorTest {
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val projectionAccess = FakeProjectionAccess()
-            val audioSource = FakeAudioCaptureSource()
             val rtcPublisherFactory = FakeRtcPublisherFactory()
             val signalingClient = FakeSignalingClient()
             val logger = FakeAppLogger()
@@ -44,7 +40,6 @@ class StreamingSessionCoordinatorTest {
             val coordinator =
                 StreamingSessionCoordinator(
                     projectionPermissionGateway = FakeProjectionPermissionGateway(nextAccess = projectionAccess),
-                    audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(audioSource),
                     codecCapabilityRepository = FakeCodecCapabilityRepository(),
                     codecPolicy = FakeCodecPolicy(),
                     rtcPublisherFactory = rtcPublisherFactory,
@@ -56,7 +51,6 @@ class StreamingSessionCoordinatorTest {
             coordinator.start(
                 StreamConfig(
                     codecPreference = CodecPreference.H264,
-                    audioEnabled = false,
                     signalingEndpoint = VALID_SIGNALING_ENDPOINT,
                 ),
             )
@@ -65,10 +59,12 @@ class StreamingSessionCoordinatorTest {
             val state = coordinator.observeState().value
             assertEquals(CaptureState.Capturing, state.captureState)
             assertEquals(PublishState.Publishing, state.publishState)
-            assertEquals(AudioStreamState.Disabled, state.audioState)
             assertEquals(1, rtcPublisherFactory.session.publishCount)
             assertEquals(1, signalingClient.openCount)
-            assertEquals(UiText.of(io.relavr.sender.core.model.R.string.sender_status_streaming_video_only), state.statusDetail)
+            assertEquals(
+                UiText.of(io.relavr.sender.core.model.R.string.sender_status_streaming_video_only),
+                state.statusDetail,
+            )
             assertNull(state.error)
         }
 
@@ -80,7 +76,6 @@ class StreamingSessionCoordinatorTest {
             val coordinator =
                 StreamingSessionCoordinator(
                     projectionPermissionGateway = projectionGateway,
-                    audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(),
                     codecCapabilityRepository = FakeCodecCapabilityRepository(),
                     codecPolicy = FakeCodecPolicy(),
                     rtcPublisherFactory = FakeRtcPublisherFactory(),
@@ -113,7 +108,6 @@ class StreamingSessionCoordinatorTest {
             val coordinator =
                 StreamingSessionCoordinator(
                     projectionPermissionGateway = FakeProjectionPermissionGateway(shouldDeny = true),
-                    audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(),
                     codecCapabilityRepository = FakeCodecCapabilityRepository(),
                     codecPolicy = FakeCodecPolicy(),
                     rtcPublisherFactory = FakeRtcPublisherFactory(),
@@ -124,7 +118,6 @@ class StreamingSessionCoordinatorTest {
 
             coordinator.start(
                 StreamConfig(
-                    audioEnabled = true,
                     signalingEndpoint = VALID_SIGNALING_ENDPOINT,
                 ),
             )
@@ -149,7 +142,6 @@ class StreamingSessionCoordinatorTest {
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val projectionAccess = FakeProjectionAccess()
-            val audioSource = FakeAudioCaptureSource()
             val rtcPublisherFactory = FakeRtcPublisherFactory()
             val signalingClient = FakeSignalingClient()
             val logger = FakeAppLogger()
@@ -157,7 +149,6 @@ class StreamingSessionCoordinatorTest {
             val coordinator =
                 StreamingSessionCoordinator(
                     projectionPermissionGateway = FakeProjectionPermissionGateway(nextAccess = projectionAccess),
-                    audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(audioSource),
                     codecCapabilityRepository = FakeCodecCapabilityRepository(),
                     codecPolicy = FakeCodecPolicy(),
                     rtcPublisherFactory = rtcPublisherFactory,
@@ -168,7 +159,6 @@ class StreamingSessionCoordinatorTest {
 
             coordinator.start(
                 StreamConfig(
-                    audioEnabled = true,
                     signalingEndpoint = VALID_SIGNALING_ENDPOINT,
                 ),
             )
@@ -179,50 +169,9 @@ class StreamingSessionCoordinatorTest {
             val state = coordinator.observeState().value
             assertEquals(CaptureState.Idle, state.captureState)
             assertEquals(PublishState.Idle, state.publishState)
-            assertEquals(AudioStreamState.Disabled, state.audioState)
             assertTrue(projectionAccess.closed)
-            assertTrue(audioSource.closed)
             assertTrue(rtcPublisherFactory.session.closed)
             assertEquals(1, signalingClient.session.closeCount)
-        }
-
-    @Test
-    fun `audio capture initialization failures degrade to video-only streaming`() =
-        runTest {
-            val dispatcher = StandardTestDispatcher(testScheduler)
-            val audioCaptureSourceFactory =
-                FakeAudioCaptureSourceFactory().also {
-                    it.shouldFail = true
-                }
-            val coordinator =
-                StreamingSessionCoordinator(
-                    projectionPermissionGateway = FakeProjectionPermissionGateway(),
-                    audioCaptureSourceFactory = audioCaptureSourceFactory,
-                    codecCapabilityRepository = FakeCodecCapabilityRepository(),
-                    codecPolicy = FakeCodecPolicy(),
-                    rtcPublisherFactory = FakeRtcPublisherFactory(),
-                    signalingClient = FakeSignalingClient(),
-                    dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
-                    logger = FakeAppLogger(),
-                )
-
-            coordinator.start(
-                StreamConfig(
-                    audioEnabled = true,
-                    signalingEndpoint = VALID_SIGNALING_ENDPOINT,
-                ),
-            )
-            advanceUntilIdle()
-
-            val state = coordinator.observeState().value
-            assertEquals(CaptureState.Capturing, state.captureState)
-            assertEquals(PublishState.Publishing, state.publishState)
-            assertEquals(AudioStreamState.Degraded, state.audioState)
-            assertEquals(
-                UiText.of(io.relavr.sender.core.model.R.string.sender_error_audio_capture_unavailable),
-                state.audioDetail,
-            )
-            assertEquals(UiText.of(io.relavr.sender.core.model.R.string.sender_status_streaming_video_only), state.statusDetail)
         }
 
     @Test
@@ -234,7 +183,6 @@ class StreamingSessionCoordinatorTest {
             val coordinator =
                 StreamingSessionCoordinator(
                     projectionPermissionGateway = FakeProjectionPermissionGateway(nextAccess = projectionAccess),
-                    audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(),
                     codecCapabilityRepository = FakeCodecCapabilityRepository(),
                     codecPolicy = FakeCodecPolicy(),
                     rtcPublisherFactory = rtcPublisherFactory,
@@ -256,50 +204,6 @@ class StreamingSessionCoordinatorTest {
         }
 
     @Test
-    fun `audio degradation during streaming does not stop video publishing`() =
-        runTest {
-            val dispatcher = StandardTestDispatcher(testScheduler)
-            val rtcPublisherFactory = FakeRtcPublisherFactory()
-            val coordinator =
-                StreamingSessionCoordinator(
-                    projectionPermissionGateway = FakeProjectionPermissionGateway(),
-                    audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(FakeAudioCaptureSource()),
-                    codecCapabilityRepository = FakeCodecCapabilityRepository(),
-                    codecPolicy = FakeCodecPolicy(),
-                    rtcPublisherFactory = rtcPublisherFactory,
-                    signalingClient = FakeSignalingClient(),
-                    dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
-                    logger = FakeAppLogger(),
-                )
-
-            coordinator.start(
-                StreamConfig(
-                    audioEnabled = true,
-                    signalingEndpoint = VALID_SIGNALING_ENDPOINT,
-                ),
-            )
-            advanceUntilIdle()
-
-            rtcPublisherFactory.session.emitEvent(
-                RtcSessionEvent.AudioDegraded(
-                    UiText.of(io.relavr.sender.core.model.R.string.sender_audio_degraded_video_only),
-                ),
-            )
-            advanceUntilIdle()
-
-            val state = coordinator.observeState().value
-            assertEquals(CaptureState.Capturing, state.captureState)
-            assertEquals(PublishState.Publishing, state.publishState)
-            assertEquals(AudioStreamState.Degraded, state.audioState)
-            assertEquals(
-                UiText.of(io.relavr.sender.core.model.R.string.sender_audio_degraded_video_only),
-                state.audioDetail,
-            )
-            assertEquals(UiText.of(io.relavr.sender.core.model.R.string.sender_status_streaming_video_only), state.statusDetail)
-            assertNull(state.error)
-        }
-
-    @Test
     fun `video profile changes update the active profile without stopping the session`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
@@ -307,7 +211,6 @@ class StreamingSessionCoordinatorTest {
             val coordinator =
                 StreamingSessionCoordinator(
                     projectionPermissionGateway = FakeProjectionPermissionGateway(),
-                    audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(),
                     codecCapabilityRepository = FakeCodecCapabilityRepository(),
                     codecPolicy = FakeCodecPolicy(),
                     rtcPublisherFactory = rtcPublisherFactory,
@@ -364,7 +267,6 @@ class StreamingSessionCoordinatorTest {
             val coordinator =
                 StreamingSessionCoordinator(
                     projectionPermissionGateway = FakeProjectionPermissionGateway(nextAccess = projectionAccess),
-                    audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(),
                     codecCapabilityRepository = FakeCodecCapabilityRepository(),
                     codecPolicy = FakeCodecPolicy(),
                     rtcPublisherFactory = rtcPublisherFactory,
@@ -402,7 +304,6 @@ class StreamingSessionCoordinatorTest {
             val coordinator =
                 StreamingSessionCoordinator(
                     projectionPermissionGateway = FakeProjectionPermissionGateway(),
-                    audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(),
                     codecCapabilityRepository = FakeCodecCapabilityRepository(),
                     codecPolicy = FakeCodecPolicy(),
                     rtcPublisherFactory = rtcPublisherFactory,

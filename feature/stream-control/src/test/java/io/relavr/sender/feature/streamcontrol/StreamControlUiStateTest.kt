@@ -10,7 +10,7 @@ import io.relavr.sender.core.model.VideoResolution
 import io.relavr.sender.core.model.VideoStreamProfile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNotNull
 import org.junit.Test
 
 class StreamControlUiStateTest {
@@ -68,13 +68,12 @@ class StreamControlUiStateTest {
                         capabilities =
                             CapabilitySnapshot(
                                 supportedCodecs = setOf(CodecPreference.H264),
-                                audioPlaybackCaptureSupported = true,
                                 supportedProfiles = setOf(supportedProfile),
                             ),
                     ),
             )
 
         assertFalse(uiState.startEnabled)
-        assertTrue(uiState.errorMessage != null)
+        assertNotNull(uiState.errorMessage)
     }
 }

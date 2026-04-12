@@ -17,18 +17,9 @@ enum class PublishState {
     Error,
 }
 
-enum class AudioStreamState {
-    Disabled,
-    Starting,
-    Publishing,
-    Degraded,
-}
-
 data class StreamingSessionSnapshot(
     val captureState: CaptureState = CaptureState.Idle,
     val publishState: PublishState = PublishState.Idle,
-    val audioState: AudioStreamState = AudioStreamState.Disabled,
-    val audioDetail: UiText? = null,
     val resolvedConfig: StreamConfig? = null,
     val activeVideoProfile: VideoStreamProfile? = null,
     val capabilities: CapabilitySnapshot? = null,

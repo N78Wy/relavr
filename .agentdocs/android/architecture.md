@@ -3,8 +3,8 @@
 - `feature/stream-control`：发送控制台 UI、ViewModel、用户动作与界面状态映射。
 - `core/common`：线程抽象与可复用基础能力，不依赖具体平台实现。
 - `core/model`：配置、能力快照、状态、错误模型与信令配置校验。
-- `core/session`：发送会话编排层，定义授权、音频接缝、推流、信令消息与 RTC 事件边界接口。
-- `platform/android-capture`：MediaProjection 授权桥接与 AudioPlaybackCapture 接缝实现。
+- `core/session`：发送会话编排层，定义授权、推流、信令消息与 RTC 事件边界接口。
+- `platform/android-capture`：MediaProjection 授权桥接实现。
 - `platform/media-codec`：编码能力探测、默认 CodecPolicy 与 codec fallback 策略。
 - `platform/webrtc`：`ScreenCapturerAndroid + PeerConnection + WebSocket` 推流实现，负责 sender 侧 JSON 信令协议、WebRTC codec 能力探测与按编码偏好排序的 SDP 协商。
 - `testing/fakes`：供单元测试和集成测试复用的 fake 实现。
@@ -28,19 +28,17 @@
 - MediaProjection 系统授权必须逐次请求，不允许跨推流会话缓存并复用上一次授权结果；相关实现只能在单次开始流程内消费授权结果。
 - sender 侧 WebRTC 建链固定走 `WebSocket + JSON Offer/Answer` 协议，消息类型只包含 `join`、`offer`、`answer`、`ice-candidate`、`leave`、`error` 六类。
 - sender 扫码连接接收端时固定解析 `receiver-connect v2`，从二维码恢复 `scheme`、`host`、`port`、`path` 与 `sessionId`；因此扫码链路必须同时兼容 `ws://` 和 `wss://`。
-- sender 既然固定依赖 WebSocket 信令、WebRTC 网络状态监测与系统播放音频采集，`app` manifest 必须同时声明 `android.permission.INTERNET`、`android.permission.ACCESS_NETWORK_STATE` 与 `android.permission.RECORD_AUDIO`；缺少前两者会直接导致建链或网络监测失败，缺少后者则必须走视频-only 降级。
-- 发送控制台固定开放 `signalingEndpoint`、`sessionId`、编码选择、分辨率、帧率、码率与音频开关；编码和视频规格都只能在开播前修改。规格候选当前固定为 `1280x720 / 1600x900 / 1920x1080`、`24 / 30 / 45 / 60 FPS`、`2000 / 4000 / 6000 / 8000 kbps`，默认值为 `1280x720 / 30 FPS / 4000 kbps`。编码默认优先 H.264，并且只展示设备 MediaCodec 与 libwebrtc 交集后的可用编码。音频默认开启：首次进入且未授权时由 `app` 层自动请求 `RECORD_AUDIO`；用户手动把音频开关从关切到开时也必须再次请求；用户拒绝后开关立即回退为关闭；如果用户选择“拒绝且不再提醒”，控制台必须切换为内联“打开系统设置”入口，不能继续重复发起无效权限请求。`app` 层必须持久化“是否已请求过录音权限”标记，用于区分首次未请求与永久拒绝。开始推流前仍需由 `app` 层再做一次兜底预检，但即使用户拒绝，也只能降级为仅视频，不能直接中断整个会话。
+- sender 既然固定依赖 WebSocket 信令与 WebRTC 网络状态监测，`app` manifest 必须声明 `android.permission.INTERNET` 与 `android.permission.ACCESS_NETWORK_STATE`；当前版本不申请 `android.permission.RECORD_AUDIO`，也不保留音频降级分支。
+- 发送控制台固定开放 `signalingEndpoint`、`sessionId`、编码选择、分辨率、帧率与码率；这些配置都只能在开播前修改。规格候选当前固定为 `1280x720 / 1600x900 / 1920x1080`、`24 / 30 / 45 / 60 FPS`、`2000 / 4000 / 6000 / 8000 kbps`，默认值为 `1280x720 / 30 FPS / 4000 kbps`。编码默认优先 H.264，并且只展示设备 MediaCodec 与 libwebrtc 交集后的可用编码。
 - sender 视频能力现在必须同时维护两层概念：开播前用户选择的 requested profile，以及会话中真实生效的 active profile。设备能力探测需要为预设规格生成 `codec + resolution + fps + bitrate` 组合矩阵，开始推流前据此做二次校验；如果会话内检测到硬件编码器持续过载，则允许在不重连的前提下按预设梯度自动降档，并通过独立状态把 active profile 与降档原因同步给 UI / 通知层。
 - 发送控制台的可编辑配置必须统一通过 `feature/stream-control` 暴露的 `StreamControlConfigStore` 接缝加载和保存；`feature` 只依赖抽象，具体持久化固定由 `app` 层 `DataStore` 实现，禁止在 `feature` 直接访问 `DataStore`、`SharedPreferences` 等 Android 存储 API。
 - Quest 主界面必须同时提供自由窗口默认尺寸提示和 Compose 响应式布局兜底：`MainActivity` 通过 manifest `layout` 指定平板级默认宽度与最小宽度，发送控制台在 `<600dp`、`600-839dp`、`>=840dp` 三档宽度下分别切换为紧凑单列、居中单列和宽屏双列，避免 VR 设备上出现手机式窄栏布局。
-- sender 真实音频固定通过同一 `MediaProjection` 会话上的 `AudioPlaybackCapture + JavaAudioDeviceModule.AudioBufferCallback` 接入 WebRTC，不允许回退到麦克风采集或额外实现独立混音链路。
 - 所有会实例化 `DefaultVideoEncoderFactory`、`PeerConnectionFactory` 或其他直接进入 `org.webrtc` native 方法的实现，都必须先复用共享 `WebRtcLibraryInitializer` 执行一次性初始化；禁止把 `PeerConnectionFactory.initialize(...)` 藏在单个调用点的私有细节里并假设其他路径不会提前访问 JNI。
 - 当前发送控制台和扫码链路都必须接受 `ws://` 与 `wss://` 两类 signaling 地址：Android receiver 继续以 `ws://` 为主，部署到 HTTPS 的 browser-preview 可回填 `wss://`；如后续要强制全站只保留 `wss://`，必须同步收紧 manifest 策略并更新回归测试。
-- 运行时音频异常只允许降级到静音/仅视频，不做中途 renegotiation；会话主状态继续保持推流中，音频细节通过独立的 `audioState` / `audioDetail` 对外暴露。
 - sender app 现已固定支持 `English` 与 `简体中文` 两种界面语言；首次启动跟随系统，用户手动切换后由 `AppCompat` locale 持久化恢复。
 - 只要 `MainActivity` 继续继承 `AppCompatActivity` 且语言切换仍依赖 `AppCompat` locale，`app` 启动主题就必须保持 `AppCompat` 兼容父主题，不能回退到 `@android:style/Theme.DeviceDefault.*` 等非 `AppCompat` 主题，否则会在 `setContent` 前直接启动崩溃。
 - 所有用户可见文案、错误原因与会话状态细节都必须通过 `UiText` 或等价语义类型表达，`ViewModel`、会话快照与错误模型不得缓存最终展示字符串，避免语言切换后残留旧 locale 文案。
-- `demo/browser-preview` 只支持单个 `sessionId` 下的一发一收；sender 可先于 receiver 启动，服务端负责缓存最新 `offer` 与 sender 侧 ICE candidate，供后加入的浏览器补齐建链；receiver 页面会尝试自动播放远端音视频，并在被浏览器拦截时提示用户手动恢复声音。
+- `demo/browser-preview` 只支持单个 `sessionId` 下的一发一收；sender 可先于 receiver 启动，服务端负责缓存最新 `offer` 与 sender 侧 ICE candidate，供后加入的浏览器补齐建链；当前 sender 只输出远端视频流。
 
 ## 测试基线
 - 单元测试至少覆盖 codec 选择策略、发送会话状态机与 ViewModel 行为。

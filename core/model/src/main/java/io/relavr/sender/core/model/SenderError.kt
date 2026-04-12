@@ -27,11 +27,6 @@ sealed interface SenderError {
         override val uiText: UiText,
     ) : SenderError
 
-    data class AudioCaptureUnavailable(
-        override val message: String,
-        override val uiText: UiText = UiText.of(R.string.sender_error_audio_capture_unavailable),
-    ) : SenderError
-
     data class SignalingFailed(
         override val message: String,
         override val uiText: UiText = UiText.of(R.string.sender_error_signaling_failed),

@@ -10,7 +10,6 @@ import io.relavr.sender.testing.fakes.FakeStreamingSessionController
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -18,7 +17,6 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -51,7 +49,6 @@ class StreamControlViewModelTest {
                             resolution = VideoResolution(width = 1920, height = 1080),
                             fps = 60,
                             bitrateKbps = 8000,
-                            audioEnabled = false,
                         ),
                 )
             val viewModel =
@@ -70,7 +67,6 @@ class StreamControlViewModelTest {
             assertEquals(8000, state.bitrateOptions.single { it.selected }.value)
             assertEquals("wss://signal.example/ws", state.signalingEndpoint)
             assertEquals("saved-room", state.sessionId)
-            assertFalse(state.audioEnabled)
             assertTrue(state.startEnabled)
         }
 
@@ -122,7 +118,6 @@ class StreamControlViewModelTest {
             viewModel.onResolutionChanged(VideoResolution(width = 1920, height = 1080))
             viewModel.onFpsChanged(60)
             viewModel.onBitrateChanged(8000)
-            viewModel.onAudioToggleRequested(false)
             advanceUntilIdle()
 
             assertEquals(
@@ -133,7 +128,6 @@ class StreamControlViewModelTest {
                     resolution = VideoResolution(width = 1920, height = 1080),
                     fps = 60,
                     bitrateKbps = 8000,
-                    audioEnabled = false,
                 ),
                 configStore.storedConfig,
             )
@@ -165,7 +159,22 @@ class StreamControlViewModelTest {
             assertEquals(VideoResolution(width = 1920, height = 1080), controller.lastStartConfig?.resolution)
             assertEquals(60, controller.lastStartConfig?.fps)
             assertEquals(8000, controller.lastStartConfig?.bitrateKbps)
-            assertTrue(controller.lastStartConfig?.audioEnabled ?: false)
+        }
+
+    @Test
+    fun `stop delegates to the session controller`() =
+        runTest(dispatcher.scheduler) {
+            val controller = FakeStreamingSessionController()
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = controller,
+                    configStore = FakeStreamControlConfigStore(),
+                )
+
+            viewModel.onStopClicked()
+            advanceUntilIdle()
+
+            assertEquals(1, controller.stopCount)
         }
 
     @Test
@@ -195,7 +204,6 @@ class StreamControlViewModelTest {
             viewModel.onResolutionChanged(VideoResolution(width = 1920, height = 1080))
             viewModel.onFpsChanged(60)
             viewModel.onBitrateChanged(8000)
-            viewModel.onAudioToggleRequested(false)
             viewModel.onScannerPayloadReceived(payload)
             advanceUntilIdle()
 
@@ -206,7 +214,6 @@ class StreamControlViewModelTest {
             assertEquals(VideoResolution(width = 1920, height = 1080), controller.lastStartConfig?.resolution)
             assertEquals(60, controller.lastStartConfig?.fps)
             assertEquals(8000, controller.lastStartConfig?.bitrateKbps)
-            assertFalse(controller.lastStartConfig?.audioEnabled ?: true)
             assertEquals("wss://preview.relavr.example:443/ws", configStore.storedConfig.signalingEndpoint)
             assertEquals("receiver-room", configStore.storedConfig.sessionId)
             assertTrue(
@@ -247,7 +254,6 @@ class StreamControlViewModelTest {
                     capabilitySnapshot =
                         CapabilitySnapshot(
                             supportedCodecs = setOf(CodecPreference.HEVC, CodecPreference.VP8),
-                            audioPlaybackCaptureSupported = true,
                             defaultCodec = CodecPreference.HEVC,
                         ),
                 )
@@ -271,134 +277,6 @@ class StreamControlViewModelTest {
             assertEquals(CodecPreference.HEVC, configStore.storedConfig.codecPreference)
         }
 
-    @Test
-    fun `audio enabled config auto-requests permission after an explicit denied snapshot`() =
-        runTest(dispatcher.scheduler) {
-            val controller = FakeStreamingSessionController()
-            val loadGate = CompletableDeferred<Unit>()
-            val configStore =
-                FakeStreamControlConfigStore(
-                    initialConfig = StreamConfig(signalingEndpoint = VALID_SIGNALING_ENDPOINT),
-                    loadGate = loadGate,
-                )
-            val viewModel =
-                StreamControlViewModel(
-                    sessionController = controller,
-                    configStore = configStore,
-                )
-            val permissionRequests = mutableListOf<Unit>()
-
-            backgroundScope.launch(dispatcher) {
-                viewModel.recordAudioPermissionRequests.collect { permissionRequests += Unit }
-            }
-            advanceUntilIdle()
-
-            viewModel.onRecordAudioPermissionSnapshot(RecordAudioPermissionStatus.Requestable)
-            advanceUntilIdle()
-            assertEquals(0, permissionRequests.size)
-
-            loadGate.complete(Unit)
-            advanceUntilIdle()
-
-            assertEquals(1, permissionRequests.size)
-            assertTrue(viewModel.uiState.value.audioPermissionRequestPending)
-            assertFalse(viewModel.uiState.value.startEnabled)
-        }
-
-    @Test
-    fun `denied record permission turns audio off and the next manual enable retries`() =
-        runTest(dispatcher.scheduler) {
-            val configStore =
-                FakeStreamControlConfigStore(
-                    initialConfig = StreamConfig(signalingEndpoint = VALID_SIGNALING_ENDPOINT),
-                )
-            val viewModel =
-                StreamControlViewModel(
-                    sessionController = FakeStreamingSessionController(),
-                    configStore = configStore,
-                )
-            advanceUntilIdle()
-
-            viewModel.onRecordAudioPermissionSnapshot(RecordAudioPermissionStatus.Requestable)
-            advanceUntilIdle()
-            assertTrue(viewModel.uiState.value.audioPermissionRequestPending)
-
-            viewModel.onRecordAudioPermissionResolved(RecordAudioPermissionStatus.Requestable)
-            advanceUntilIdle()
-
-            assertFalse(viewModel.uiState.value.audioEnabled)
-            assertFalse(viewModel.uiState.value.audioPermissionRequestPending)
-            assertFalse(configStore.storedConfig.audioEnabled)
-
-            viewModel.onAudioToggleRequested(true)
-            advanceUntilIdle()
-
-            assertTrue(viewModel.uiState.value.audioPermissionRequestPending)
-        }
-
-    @Test
-    fun `permanently denied record permission keeps audio off and shows the settings action`() =
-        runTest(dispatcher.scheduler) {
-            val configStore =
-                FakeStreamControlConfigStore(
-                    initialConfig = StreamConfig(signalingEndpoint = VALID_SIGNALING_ENDPOINT),
-                )
-            val viewModel =
-                StreamControlViewModel(
-                    sessionController = FakeStreamingSessionController(),
-                    configStore = configStore,
-                )
-            val permissionRequests = mutableListOf<Unit>()
-
-            backgroundScope.launch(dispatcher) {
-                viewModel.recordAudioPermissionRequests.collect { permissionRequests += Unit }
-            }
-            advanceUntilIdle()
-
-            viewModel.onRecordAudioPermissionSnapshot(RecordAudioPermissionStatus.PermanentlyDenied)
-            advanceUntilIdle()
-
-            assertEquals(0, permissionRequests.size)
-            assertFalse(viewModel.uiState.value.audioEnabled)
-            assertFalse(viewModel.uiState.value.audioToggleEnabled)
-            assertTrue(viewModel.uiState.value.audioPermissionSettingsVisible)
-            assertFalse(configStore.storedConfig.audioEnabled)
-        }
-
-    @Test
-    fun `manual audio enable with granted permission persists without requesting again`() =
-        runTest(dispatcher.scheduler) {
-            val configStore =
-                FakeStreamControlConfigStore(
-                    initialConfig =
-                        StreamConfig(
-                            signalingEndpoint = VALID_SIGNALING_ENDPOINT,
-                            audioEnabled = false,
-                        ),
-                )
-            val viewModel =
-                StreamControlViewModel(
-                    sessionController = FakeStreamingSessionController(),
-                    configStore = configStore,
-                )
-            val permissionRequests = mutableListOf<Unit>()
-
-            backgroundScope.launch(dispatcher) {
-                viewModel.recordAudioPermissionRequests.collect { permissionRequests += Unit }
-            }
-            advanceUntilIdle()
-
-            viewModel.onRecordAudioPermissionSnapshot(RecordAudioPermissionStatus.Granted)
-            advanceUntilIdle()
-
-            viewModel.onAudioToggleRequested(true)
-            advanceUntilIdle()
-
-            assertEquals(0, permissionRequests.size)
-            assertTrue(viewModel.uiState.value.audioEnabled)
-            assertTrue(configStore.storedConfig.audioEnabled)
-        }
-
     private class FakeStreamControlConfigStore(
         initialConfig: StreamConfig = StreamConfig(),
         private val loadGate: CompletableDeferred<Unit>? = null,
@@ -414,9 +292,5 @@ class StreamControlViewModelTest {
         override suspend fun save(config: StreamConfig) {
             storedConfig = config
         }
-    }
-
-    private companion object {
-        const val VALID_SIGNALING_ENDPOINT = "ws://192.168.1.20:8080/ws"
     }
 }

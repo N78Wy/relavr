@@ -1,6 +1,5 @@
 package io.relavr.sender.app
 
-import io.relavr.sender.core.model.AudioStreamState
 import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.CodecPreference
@@ -10,8 +9,6 @@ import io.relavr.sender.core.model.UiText
 import io.relavr.sender.core.model.VideoResolution
 import io.relavr.sender.core.session.StreamingSessionCoordinator
 import io.relavr.sender.testing.fakes.FakeAppLogger
-import io.relavr.sender.testing.fakes.FakeAudioCaptureSource
-import io.relavr.sender.testing.fakes.FakeAudioCaptureSourceFactory
 import io.relavr.sender.testing.fakes.FakeCodecCapabilityRepository
 import io.relavr.sender.testing.fakes.FakeCodecPolicy
 import io.relavr.sender.testing.fakes.FakeProjectionAccess
@@ -39,13 +36,11 @@ class ForegroundServiceStreamingSessionIntegrationTest {
             val coordinator =
                 StreamingSessionCoordinator(
                     projectionPermissionGateway = FakeProjectionPermissionGateway(nextAccess = projectionAccess),
-                    audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(FakeAudioCaptureSource()),
                     codecCapabilityRepository =
                         FakeCodecCapabilityRepository(
                             snapshot =
                                 CapabilitySnapshot(
                                     supportedCodecs = setOf(CodecPreference.H264, CodecPreference.HEVC),
-                                    audioPlaybackCaptureSupported = true,
                                     defaultCodec = CodecPreference.H264,
                                 ),
                         ),
@@ -60,7 +55,6 @@ class ForegroundServiceStreamingSessionIntegrationTest {
                 ForegroundServiceStreamingSessionController(
                     sessionEngine = coordinator,
                     commandDispatcher = commandDispatcher,
-                    recordAudioPermissionGateway = FakeRecordAudioPermissionGateway(),
                     dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
                     logger = FakeAppLogger(),
                 )
@@ -87,9 +81,8 @@ class ForegroundServiceStreamingSessionIntegrationTest {
             assertTrue(controller.observeState().value.isStreaming)
             assertEquals(CaptureState.Capturing, controller.observeState().value.captureState)
             assertEquals(PublishState.Publishing, controller.observeState().value.publishState)
-            assertEquals(AudioStreamState.Publishing, controller.observeState().value.audioState)
             assertEquals(
-                UiText.of(io.relavr.sender.core.model.R.string.sender_status_streaming_audio_video),
+                UiText.of(io.relavr.sender.core.model.R.string.sender_status_streaming_video_only),
                 controller.observeState().value.statusDetail,
             )
             assertEquals(CodecPreference.HEVC, signalingClient.lastOpenedConfig?.codecPreference)
@@ -104,29 +97,23 @@ class ForegroundServiceStreamingSessionIntegrationTest {
         }
 
     @Test
-    fun `permission denial before service start keeps the integrated session in video-only mode`() =
+    fun `the service controller forwards a pure video config without mutation`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
-            val projectionAccess = FakeProjectionAccess()
-            val audioCaptureSource = FakeAudioCaptureSource()
-            val rtcPublisherFactory = FakeRtcPublisherFactory()
-            val signalingClient = FakeSignalingClient()
             val coordinator =
                 StreamingSessionCoordinator(
-                    projectionPermissionGateway = FakeProjectionPermissionGateway(nextAccess = projectionAccess),
-                    audioCaptureSourceFactory = FakeAudioCaptureSourceFactory(audioCaptureSource),
+                    projectionPermissionGateway = FakeProjectionPermissionGateway(nextAccess = FakeProjectionAccess()),
                     codecCapabilityRepository =
                         FakeCodecCapabilityRepository(
                             snapshot =
                                 CapabilitySnapshot(
                                     supportedCodecs = setOf(CodecPreference.H264, CodecPreference.HEVC),
-                                    audioPlaybackCaptureSupported = true,
                                     defaultCodec = CodecPreference.H264,
                                 ),
                         ),
                     codecPolicy = FakeCodecPolicy(),
-                    rtcPublisherFactory = rtcPublisherFactory,
-                    signalingClient = signalingClient,
+                    rtcPublisherFactory = FakeRtcPublisherFactory(),
+                    signalingClient = FakeSignalingClient(),
                     dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
                     logger = FakeAppLogger(),
                 )
@@ -135,37 +122,20 @@ class ForegroundServiceStreamingSessionIntegrationTest {
                 ForegroundServiceStreamingSessionController(
                     sessionEngine = coordinator,
                     commandDispatcher = commandDispatcher,
-                    recordAudioPermissionGateway =
-                        FakeRecordAudioPermissionGateway().also {
-                            it.nextGranted = false
-                        },
                     dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
                     logger = FakeAppLogger(),
                 )
 
             advanceUntilIdle()
 
-            controller.start(
+            val config =
                 StreamConfig(
-                    audioEnabled = true,
+                    codecPreference = CodecPreference.HEVC,
                     signalingEndpoint = VALID_SIGNALING_ENDPOINT,
-                ),
-            )
+                )
+            controller.start(config)
 
-            val forwardedConfig = commandDispatcher.lastStartConfig ?: error("missing forwarded config")
-            assertEquals(false, forwardedConfig.audioEnabled)
-
-            coordinator.start(forwardedConfig)
-            advanceUntilIdle()
-
-            assertTrue(controller.observeState().value.isStreaming)
-            assertEquals(AudioStreamState.Disabled, controller.observeState().value.audioState)
-            assertEquals(
-                UiText.of(io.relavr.sender.core.model.R.string.sender_status_streaming_video_only),
-                controller.observeState().value.statusDetail,
-            )
-            assertEquals(null, rtcPublisherFactory.session.lastAudioSource)
-            assertEquals(false, audioCaptureSource.started)
+            assertEquals(config, commandDispatcher.lastStartConfig)
         }
 
     private companion object {

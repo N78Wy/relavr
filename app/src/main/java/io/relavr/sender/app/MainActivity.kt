@@ -1,11 +1,7 @@
 package io.relavr.sender.app
 
-import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Bundle
-import android.provider.Settings
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -24,7 +20,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import io.relavr.sender.app.ui.theme.relavrTheme
 import io.relavr.sender.core.model.UiText
-import io.relavr.sender.feature.streamcontrol.RecordAudioPermissionStatus
 import io.relavr.sender.feature.streamcontrol.StreamControlViewModel
 import io.relavr.sender.feature.streamcontrol.streamControlScreen
 import kotlinx.coroutines.launch
@@ -35,7 +30,6 @@ class MainActivity : AppCompatActivity() {
         get() = (application as RelavrApplication).appContainer
 
     private var headsetCameraGranted by mutableStateOf(false)
-    private var recordAudioPermissionRequestInFlight: Boolean = false
 
     private val viewModel: StreamControlViewModel by viewModels {
         appContainer.streamControlViewModelFactory
@@ -46,21 +40,6 @@ class MainActivity : AppCompatActivity() {
             appContainer.projectionPermissionGateway.onPermissionResult(
                 resultCode = result.resultCode,
                 data = result.data,
-            )
-        }
-    private val recordAudioPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            val status =
-                resolveRecordAudioPermissionStatus(
-                    granted = granted,
-                    hasRequestedBefore = true,
-                    shouldShowRequestPermissionRationale =
-                        !granted && shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO),
-                )
-            recordAudioPermissionRequestInFlight = false
-            viewModel.onRecordAudioPermissionResolved(status)
-            appContainer.recordAudioPermissionGateway.onPermissionResult(
-                granted = status == RecordAudioPermissionStatus.Granted,
             )
         }
     private val headsetCameraPermissionLauncher =
@@ -77,26 +56,11 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         headsetCameraGranted = hasPermission(HEADSET_CAMERA_PERMISSION)
-        syncRecordAudioPermission()
 
         lifecycleScope.launch {
             repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
                 appContainer.projectionPermissionGateway.permissionRequests.collect { intent ->
                     projectionPermissionLauncher.launch(intent)
-                }
-            }
-        }
-        lifecycleScope.launch {
-            repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
-                appContainer.recordAudioPermissionGateway.permissionRequests.collect { permission ->
-                    launchRecordAudioPermissionRequest(permission)
-                }
-            }
-        }
-        lifecycleScope.launch {
-            repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
-                viewModel.recordAudioPermissionRequests.collect {
-                    launchRecordAudioPermissionRequest(Manifest.permission.RECORD_AUDIO)
                 }
             }
         }
@@ -125,8 +89,6 @@ class MainActivity : AppCompatActivity() {
                         onSignalingEndpointChanged = viewModel::onSignalingEndpointChanged,
                         onSessionIdChanged = viewModel::onSessionIdChanged,
                         onCodecPreferenceChanged = viewModel::onCodecPreferenceChanged,
-                        onAudioEnabledChanged = viewModel::onAudioToggleRequested,
-                        onOpenAudioPermissionSettingsClicked = ::openRecordAudioPermissionSettings,
                         onOpenScannerClicked = viewModel::onOpenScannerClicked,
                         onResolutionChanged = viewModel::onResolutionChanged,
                         onFpsChanged = viewModel::onFpsChanged,
@@ -150,75 +112,10 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         headsetCameraGranted = hasPermission(HEADSET_CAMERA_PERMISSION)
-        syncRecordAudioPermission()
-    }
-
-    override fun onStop() {
-        super.onStop()
     }
 
     private fun hasPermission(permission: String): Boolean =
         ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
-
-    private fun syncRecordAudioPermission() {
-        if (recordAudioPermissionRequestInFlight) {
-            return
-        }
-        lifecycleScope.launch {
-            viewModel.onRecordAudioPermissionSnapshot(resolveCurrentRecordAudioPermissionStatus(Manifest.permission.RECORD_AUDIO))
-        }
-    }
-
-    private fun launchRecordAudioPermissionRequest(permission: String) {
-        if (recordAudioPermissionRequestInFlight) {
-            return
-        }
-        recordAudioPermissionRequestInFlight = true
-        lifecycleScope.launch {
-            when (val status = resolveCurrentRecordAudioPermissionStatus(permission)) {
-                RecordAudioPermissionStatus.Granted -> {
-                    recordAudioPermissionRequestInFlight = false
-                    viewModel.onRecordAudioPermissionResolved(status)
-                    appContainer.recordAudioPermissionGateway.onPermissionResult(granted = true)
-                }
-
-                RecordAudioPermissionStatus.PermanentlyDenied -> {
-                    recordAudioPermissionRequestInFlight = false
-                    viewModel.onRecordAudioPermissionResolved(status)
-                    appContainer.recordAudioPermissionGateway.onPermissionResult(granted = false)
-                }
-
-                RecordAudioPermissionStatus.Requestable -> {
-                    runCatching {
-                        appContainer.recordAudioPermissionPreferenceStore.markRequested()
-                    }
-                    recordAudioPermissionLauncher.launch(permission)
-                }
-            }
-        }
-    }
-
-    private suspend fun resolveCurrentRecordAudioPermissionStatus(permission: String): RecordAudioPermissionStatus {
-        val granted = hasPermission(permission)
-        return resolveRecordAudioPermissionStatus(
-            granted = granted,
-            hasRequestedBefore =
-                runCatching {
-                    appContainer.recordAudioPermissionPreferenceStore.hasRequestedBefore()
-                }.getOrDefault(false),
-            shouldShowRequestPermissionRationale =
-                !granted && shouldShowRequestPermissionRationale(permission),
-        )
-    }
-
-    private fun openRecordAudioPermissionSettings() {
-        startActivity(
-            Intent(
-                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                Uri.fromParts("package", packageName, null),
-            ),
-        )
-    }
 
     companion object {
         private const val HEADSET_CAMERA_PERMISSION = "horizonos.permission.HEADSET_CAMERA"

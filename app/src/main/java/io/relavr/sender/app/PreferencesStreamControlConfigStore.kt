@@ -3,7 +3,6 @@ package io.relavr.sender.app
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -26,9 +25,6 @@ private val defaultStreamConfig = StreamConfig()
 
 internal fun createStreamControlConfigStore(context: Context): StreamControlConfigStore =
     PreferencesStreamControlConfigStore(context.streamControlConfigDataStore)
-
-internal fun createRecordAudioPermissionPreferenceStore(context: Context): RecordAudioPermissionPreferenceStore =
-    PreferencesRecordAudioPermissionPreferenceStore(context.streamControlConfigDataStore)
 
 internal class PreferencesStreamControlConfigStore(
     private val dataStore: DataStore<Preferences>,
@@ -53,35 +49,6 @@ internal class PreferencesStreamControlConfigStore(
     }
 }
 
-internal interface RecordAudioPermissionPreferenceStore {
-    suspend fun hasRequestedBefore(): Boolean
-
-    suspend fun markRequested()
-}
-
-internal class PreferencesRecordAudioPermissionPreferenceStore(
-    private val dataStore: DataStore<Preferences>,
-) : RecordAudioPermissionPreferenceStore {
-    override suspend fun hasRequestedBefore(): Boolean {
-        val preferences =
-            dataStore.data
-                .catch { throwable ->
-                    if (throwable is IOException) {
-                        emit(emptyPreferences())
-                    } else {
-                        throw throwable
-                    }
-                }.first()
-        return preferences[RECORD_AUDIO_PERMISSION_REQUESTED_KEY] ?: false
-    }
-
-    override suspend fun markRequested() {
-        dataStore.edit { preferences ->
-            preferences[RECORD_AUDIO_PERMISSION_REQUESTED_KEY] = true
-        }
-    }
-}
-
 internal val SIGNALING_ENDPOINT_KEY = stringPreferencesKey("stream_control.signaling_endpoint")
 internal val SESSION_ID_KEY = stringPreferencesKey("stream_control.session_id")
 internal val CODEC_PREFERENCE_KEY = stringPreferencesKey("stream_control.codec_preference")
@@ -89,9 +56,6 @@ internal val RESOLUTION_WIDTH_KEY = intPreferencesKey("stream_control.resolution
 internal val RESOLUTION_HEIGHT_KEY = intPreferencesKey("stream_control.resolution_height")
 internal val FPS_KEY = intPreferencesKey("stream_control.fps")
 internal val BITRATE_KBPS_KEY = intPreferencesKey("stream_control.bitrate_kbps")
-internal val AUDIO_ENABLED_KEY = booleanPreferencesKey("stream_control.audio_enabled")
-internal val RECORD_AUDIO_PERMISSION_REQUESTED_KEY =
-    booleanPreferencesKey("stream_control.record_audio_permission_requested")
 
 private fun Preferences.toStreamConfig(): StreamConfig =
     StreamConfig(
@@ -111,7 +75,6 @@ private fun Preferences.toStreamConfig(): StreamConfig =
             this[BITRATE_KBPS_KEY]?.takeIf { storedBitrate ->
                 storedBitrate in StreamConfig.BITRATE_OPTIONS_KBPS
             } ?: defaultStreamConfig.bitrateKbps,
-        audioEnabled = this[AUDIO_ENABLED_KEY] ?: defaultStreamConfig.audioEnabled,
     )
 
 private fun androidx.datastore.preferences.core.MutablePreferences.updateFrom(config: StreamConfig) {
@@ -122,5 +85,4 @@ private fun androidx.datastore.preferences.core.MutablePreferences.updateFrom(co
     this[RESOLUTION_HEIGHT_KEY] = config.resolution.height
     this[FPS_KEY] = config.fps
     this[BITRATE_KBPS_KEY] = config.bitrateKbps
-    this[AUDIO_ENABLED_KEY] = config.audioEnabled
 }

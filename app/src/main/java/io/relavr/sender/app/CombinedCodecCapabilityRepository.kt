@@ -25,7 +25,6 @@ internal class CombinedCodecCapabilityRepository(
 
         return CapabilitySnapshot(
             supportedCodecs = supportedCodecs,
-            audioPlaybackCaptureSupported = androidCapabilities.audioPlaybackCaptureSupported,
             defaultCodec = CapabilitySnapshot.resolveDefaultCodec(supportedCodecs),
             supportedProfiles = supportedProfiles,
         )

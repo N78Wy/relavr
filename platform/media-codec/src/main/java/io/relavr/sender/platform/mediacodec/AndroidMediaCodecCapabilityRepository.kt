@@ -1,7 +1,6 @@
 package io.relavr.sender.platform.mediacodec
 
 import android.media.MediaCodecList
-import android.os.Build
 import io.relavr.sender.core.common.AppDispatchers
 import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CodecPreference
@@ -48,7 +47,6 @@ class AndroidMediaCodecCapabilityRepository(
 
             CapabilitySnapshot(
                 supportedCodecs = supportedCodecs,
-                audioPlaybackCaptureSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q,
                 defaultCodec = CapabilitySnapshot.resolveDefaultCodec(supportedCodecs),
                 supportedProfiles = supportedProfiles,
             )

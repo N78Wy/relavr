@@ -100,7 +100,6 @@ class StreamConfigTest {
         val capabilities =
             CapabilitySnapshot(
                 supportedCodecs = setOf(CodecPreference.H264),
-                audioPlaybackCaptureSupported = true,
                 supportedProfiles =
                     setOf(
                         VideoStreamProfile(

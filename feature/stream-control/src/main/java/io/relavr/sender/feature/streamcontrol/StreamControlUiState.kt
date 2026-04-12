@@ -1,6 +1,5 @@
 package io.relavr.sender.feature.streamcontrol
 
-import io.relavr.sender.core.model.AudioStreamState
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.PublishState
@@ -38,11 +37,6 @@ data class StreamControlUiState(
     val scanButtonEnabled: Boolean,
     val scannerVisible: Boolean,
     val scanStatusLabel: UiText,
-    val audioEnabled: Boolean,
-    val audioPermissionRequestPending: Boolean,
-    val audioToggleEnabled: Boolean,
-    val audioStatusLabel: UiText,
-    val audioPermissionSettingsVisible: Boolean,
     val streamProfileSummary: UiText,
     val resolutionOptions: List<SelectionOptionUiState<VideoResolution>>,
     val fpsOptions: List<SelectionOptionUiState<Int>>,
@@ -56,8 +50,6 @@ internal fun buildStreamControlUiState(
     config: StreamConfig,
     scannerState: QrScannerState = QrScannerState(),
     sessionSnapshot: StreamingSessionSnapshot,
-    audioPermissionRequestPending: Boolean = false,
-    recordAudioPermissionStatus: RecordAudioPermissionStatus? = null,
 ): StreamControlUiState {
     val capabilities = sessionSnapshot.capabilities
     val configEditable =
@@ -92,25 +84,7 @@ internal fun buildStreamControlUiState(
         scanButtonEnabled = configEditable,
         scannerVisible = scannerState.visible,
         scanStatusLabel = scannerState.toStatusLabel(),
-        audioEnabled = config.audioEnabled,
-        audioPermissionRequestPending = audioPermissionRequestPending,
-        audioToggleEnabled =
-            configEditable &&
-                capabilities?.audioPlaybackCaptureSupported != false &&
-                !audioPermissionRequestPending &&
-                recordAudioPermissionStatus != RecordAudioPermissionStatus.PermanentlyDenied,
-        audioStatusLabel =
-            sessionSnapshot.toAudioStatusLabel(
-                config = config,
-                audioPermissionRequestPending = audioPermissionRequestPending,
-                recordAudioPermissionStatus = recordAudioPermissionStatus,
-            ),
-        audioPermissionSettingsVisible =
-            configEditable &&
-                capabilities?.audioPlaybackCaptureSupported != false &&
-                recordAudioPermissionStatus == RecordAudioPermissionStatus.PermanentlyDenied,
-        streamProfileSummary =
-            sessionSnapshot.toStreamProfileSummary(config),
+        streamProfileSummary = sessionSnapshot.toStreamProfileSummary(config),
         resolutionOptions =
             buildSelectionOptions(
                 options = StreamConfig.RESOLUTION_OPTIONS,
@@ -129,7 +103,7 @@ internal fun buildStreamControlUiState(
                 selectedValue = config.bitrateKbps,
                 enabled = configEditable,
             ) { option -> "$option kbps" },
-        startEnabled = configValid && configEditable && !audioPermissionRequestPending,
+        startEnabled = configValid && configEditable,
         stopEnabled =
             hasActiveSession &&
                 sessionSnapshot.captureState != CaptureState.Stopping &&
@@ -165,9 +139,7 @@ private fun StreamingSessionSnapshot.toStatusLabel(): UiText =
         isStreaming -> UiText.of(R.string.stream_control_status_streaming)
         captureState == CaptureState.RequestingPermission -> UiText.of(R.string.stream_control_status_waiting_permission)
         captureState == CaptureState.Starting || publishState == PublishState.Preparing ->
-            UiText.of(
-                R.string.stream_control_status_preparing,
-            )
+            UiText.of(R.string.stream_control_status_preparing)
         captureState == CaptureState.Stopping || publishState == PublishState.Stopping -> UiText.of(R.string.stream_control_status_stopping)
         error != null -> UiText.of(R.string.stream_control_status_failed)
         else -> UiText.of(R.string.stream_control_status_idle)
@@ -212,26 +184,6 @@ private fun VideoStreamProfile.toRequestedProfileSummary(): UiText =
         bitrateKbps,
     )
 
-private fun StreamingSessionSnapshot.toAudioStatusLabel(
-    config: StreamConfig,
-    audioPermissionRequestPending: Boolean,
-    recordAudioPermissionStatus: RecordAudioPermissionStatus?,
-): UiText =
-    when {
-        audioPermissionRequestPending ->
-            UiText.of(io.relavr.sender.core.model.R.string.sender_status_permission_requested)
-        recordAudioPermissionStatus == RecordAudioPermissionStatus.PermanentlyDenied ->
-            UiText.of(R.string.stream_control_audio_permission_permanently_denied)
-        capabilities?.audioPlaybackCaptureSupported == false -> UiText.of(R.string.stream_control_audio_unsupported)
-        !config.audioEnabled -> UiText.of(R.string.stream_control_audio_disabled)
-        audioState == AudioStreamState.Starting -> UiText.of(R.string.stream_control_audio_starting)
-        audioState == AudioStreamState.Publishing -> UiText.of(R.string.stream_control_audio_publishing)
-        audioState == AudioStreamState.Degraded ->
-            audioDetail
-                ?: UiText.of(io.relavr.sender.core.model.R.string.sender_audio_degraded_video_only)
-        else -> UiText.of(R.string.stream_control_audio_default)
-    }
-
 private fun StreamingSessionSnapshot.toCodecStatusLabel(config: StreamConfig): UiText {
     val requestedCodec = config.codecPreference.displayName
     val resolvedCodec = codecSelection?.resolved?.displayName
@@ -262,39 +214,8 @@ private fun StreamingSessionSnapshot.toCodecStatusLabel(config: StreamConfig): U
     }
 }
 
-private fun CodecPreference.toCodecOptionUiState(
-    selectedPreference: CodecPreference,
-    capabilities: io.relavr.sender.core.model.CapabilitySnapshot?,
-    configEditable: Boolean,
-): CodecOptionUiState {
-    val isSupported = capabilities?.supports(this) == true
-    val enabled =
-        configEditable &&
-            when {
-                capabilities == null -> this == CodecPreference.H264
-                else -> isSupported
-            }
-    val supportLabel =
-        when {
-            capabilities == null && this == CodecPreference.H264 -> UiText.of(R.string.stream_control_codec_support_default)
-            capabilities == null -> UiText.of(R.string.stream_control_codec_support_loading)
-            isSupported && capabilities.defaultCodec == this -> UiText.of(R.string.stream_control_codec_support_device_default)
-            isSupported -> UiText.of(R.string.stream_control_codec_support_available)
-            else -> UiText.of(R.string.stream_control_codec_support_unavailable)
-        }
-
-    return CodecOptionUiState(
-        preference = this,
-        label = displayName,
-        supportLabel = supportLabel,
-        selected = selectedPreference == this,
-        enabled = enabled,
-    )
-}
-
 private fun QrScannerState.toStatusLabel(): UiText =
     when {
-        visible -> UiText.of(R.string.stream_control_scan_waiting)
         errorMessage != null -> errorMessage
         lastReceiver != null && lastReceiver.authRequired ->
             UiText.of(
@@ -302,6 +223,34 @@ private fun QrScannerState.toStatusLabel(): UiText =
                 lastReceiver.receiverName,
                 lastReceiver.webSocketUrl,
             )
-        lastReceiver != null -> UiText.of(R.string.stream_control_scan_recent, lastReceiver.receiverName, lastReceiver.webSocketUrl)
+        lastReceiver != null ->
+            UiText.of(
+                R.string.stream_control_scan_recent,
+                lastReceiver.receiverName,
+                lastReceiver.webSocketUrl,
+            )
+        visible -> UiText.of(R.string.stream_control_scan_waiting)
         else -> UiText.of(R.string.stream_control_scan_default)
     }
+
+private fun CodecPreference.toCodecOptionUiState(
+    selectedPreference: CodecPreference,
+    capabilities: io.relavr.sender.core.model.CapabilitySnapshot?,
+    configEditable: Boolean,
+): CodecOptionUiState {
+    val supportLabel =
+        when {
+            capabilities == null -> UiText.of(R.string.stream_control_codec_support_loading)
+            capabilities.defaultCodec == this && capabilities.supports(this) ->
+                UiText.of(R.string.stream_control_codec_support_device_default)
+            capabilities.supports(this) -> UiText.of(R.string.stream_control_codec_support_available)
+            else -> UiText.of(R.string.stream_control_codec_support_unavailable)
+        }
+    return CodecOptionUiState(
+        preference = this,
+        label = displayName,
+        supportLabel = supportLabel,
+        selected = this == selectedPreference,
+        enabled = configEditable,
+    )
+}

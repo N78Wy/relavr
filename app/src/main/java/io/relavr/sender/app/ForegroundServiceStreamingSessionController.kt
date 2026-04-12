@@ -2,7 +2,6 @@ package io.relavr.sender.app
 
 import io.relavr.sender.core.common.AppDispatchers
 import io.relavr.sender.core.common.AppLogger
-import io.relavr.sender.core.model.AudioStreamState
 import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.PublishState
@@ -22,7 +21,6 @@ import kotlinx.coroutines.launch
 internal class ForegroundServiceStreamingSessionController(
     private val sessionEngine: StreamingSessionController,
     private val commandDispatcher: ForegroundServiceCommandDispatcher,
-    private val recordAudioPermissionGateway: RecordAudioPermissionGateway,
     dispatchers: AppDispatchers,
     private val logger: AppLogger,
 ) : StreamingSessionController {
@@ -40,43 +38,17 @@ internal class ForegroundServiceStreamingSessionController(
     override suspend fun refreshCapabilities(): CapabilitySnapshot = sessionEngine.refreshCapabilities()
 
     override suspend fun start(config: StreamConfig) {
-        var resolvedConfig = config
         state.update { current ->
             current.copy(
                 captureState = CaptureState.RequestingPermission,
                 publishState = PublishState.Preparing,
-                audioState =
-                    if (config.audioEnabled) {
-                        AudioStreamState.Starting
-                    } else {
-                        AudioStreamState.Disabled
-                    },
                 activeVideoProfile = null,
                 statusDetail = UiText.of(io.relavr.sender.core.model.R.string.sender_status_starting_foreground_service),
                 error = null,
             )
         }
-        if (config.audioEnabled) {
-            val permissionGranted =
-                runCatching {
-                    recordAudioPermissionGateway.requestPermissionIfNeeded()
-                }.onFailure { throwable ->
-                    reportFailure(
-                        error = SenderError.SessionStartFailed(throwable.message ?: "Unable to request the audio-record permission."),
-                        throwable = throwable,
-                        operation = "Requesting the audio-record permission failed",
-                    )
-                    return
-                }.getOrDefault(false)
-            if (!permissionGranted) {
-                resolvedConfig = config.copy(audioEnabled = false)
-                state.update { current ->
-                    current.copy(audioState = AudioStreamState.Disabled)
-                }
-            }
-        }
         runCatching {
-            commandDispatcher.startSession(resolvedConfig)
+            commandDispatcher.startSession(config)
         }.onFailure { throwable ->
             reportFailure(
                 error = SenderError.SessionStartFailed(throwable.message ?: "Unable to start the foreground streaming service."),

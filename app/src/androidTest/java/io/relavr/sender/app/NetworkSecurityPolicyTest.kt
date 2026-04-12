@@ -20,7 +20,6 @@ class NetworkSecurityPolicyTest {
 
         assertTrue(requestedPermissions.contains(android.Manifest.permission.INTERNET))
         assertTrue(requestedPermissions.contains(android.Manifest.permission.ACCESS_NETWORK_STATE))
-        assertTrue(requestedPermissions.contains(android.Manifest.permission.RECORD_AUDIO))
     }
 
     @Test

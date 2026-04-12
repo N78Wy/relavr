@@ -18,7 +18,6 @@ class DefaultCodecPolicyTest {
                 capabilities =
                     CapabilitySnapshot(
                         supportedCodecs = setOf(CodecPreference.H264, CodecPreference.HEVC),
-                        audioPlaybackCaptureSupported = true,
                         defaultCodec = CodecPreference.H264,
                     ),
             )
@@ -35,7 +34,6 @@ class DefaultCodecPolicyTest {
                 capabilities =
                     CapabilitySnapshot(
                         supportedCodecs = setOf(CodecPreference.H264, CodecPreference.HEVC),
-                        audioPlaybackCaptureSupported = true,
                         defaultCodec = CodecPreference.H264,
                     ),
             )
@@ -52,7 +50,6 @@ class DefaultCodecPolicyTest {
                 capabilities =
                     CapabilitySnapshot(
                         supportedCodecs = setOf(CodecPreference.HEVC, CodecPreference.VP8),
-                        audioPlaybackCaptureSupported = true,
                         defaultCodec = CodecPreference.HEVC,
                     ),
             )
@@ -68,7 +65,6 @@ class DefaultCodecPolicyTest {
             capabilities =
                 CapabilitySnapshot(
                     supportedCodecs = emptySet(),
-                    audioPlaybackCaptureSupported = false,
                 ),
         )
     }

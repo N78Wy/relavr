@@ -7,7 +7,6 @@ import io.relavr.sender.core.model.VideoStreamProfile
 import io.relavr.sender.testing.fakes.FakeCodecCapabilityRepository
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CombinedCodecCapabilityRepositoryTest {
@@ -26,7 +25,6 @@ class CombinedCodecCapabilityRepositoryTest {
                                             CodecPreference.HEVC,
                                             CodecPreference.VP9,
                                         ),
-                                    audioPlaybackCaptureSupported = true,
                                     defaultCodec = CodecPreference.H264,
                                     supportedProfiles =
                                         setOf(
@@ -80,7 +78,6 @@ class CombinedCodecCapabilityRepositoryTest {
                 capabilities.supportedProfiles,
             )
             assertEquals(CodecPreference.H264, capabilities.defaultCodec)
-            assertTrue(capabilities.audioPlaybackCaptureSupported)
         }
 
     @Test
@@ -93,7 +90,6 @@ class CombinedCodecCapabilityRepositoryTest {
                             snapshot =
                                 CapabilitySnapshot(
                                     supportedCodecs = setOf(CodecPreference.HEVC, CodecPreference.VP8),
-                                    audioPlaybackCaptureSupported = false,
                                     defaultCodec = CodecPreference.HEVC,
                                 ),
                         ),

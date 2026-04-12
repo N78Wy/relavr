@@ -7,13 +7,6 @@
     <string name="stream_control_status_failed">Failed</string>
     <string name="stream_control_status_idle">Idle</string>
     <string name="stream_control_default_profile">Default profile: %1$s / %2$s FPS / %3$s / %4$s</string>
-    <string name="stream_control_audio_unsupported">AudioPlaybackCapture is not supported on this device.</string>
-    <string name="stream_control_audio_disabled">Audio is disabled.</string>
-    <string name="stream_control_audio_starting">Preparing audio capture.</string>
-    <string name="stream_control_audio_publishing">Streaming system audio.</string>
-    <string name="stream_control_audio_default">System playback audio will be captured after streaming starts.</string>
-    <string name="stream_control_audio_permission_permanently_denied">Audio permission was permanently denied. Open system settings to re-enable audio capture.</string>
-    <string name="stream_control_audio_open_settings">Open System Settings</string>
     <string name="stream_control_codec_fallback">Requested %1$s. Using %2$s instead.</string>
     <string name="stream_control_codec_active">This session is using %1$s.</string>
     <string name="stream_control_codec_probable_default">Default preference is %1$s while device and WebRTC capabilities are loading.</string>
@@ -49,6 +42,5 @@
     <string name="stream_control_profile_summary_requested_and_active">Requested %1$s / %2$s FPS / %3$s kbps. Active %4$s / %5$s FPS / %6$s kbps.</string>
     <string name="stream_control_start_button">Start Streaming</string>
     <string name="stream_control_stop_button">Stop Streaming</string>
-    <string name="stream_control_audio_switch_label">Enable audio capture</string>
     <string name="stream_control_error_title">Error</string>
 </resources>

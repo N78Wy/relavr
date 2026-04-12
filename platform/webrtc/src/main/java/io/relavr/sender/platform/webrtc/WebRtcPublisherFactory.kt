@@ -4,16 +4,13 @@ import android.content.Context
 import android.content.Intent
 import android.media.projection.MediaProjection
 import io.relavr.sender.core.common.AppLogger
-import io.relavr.sender.core.model.AudioStreamState
 import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.R
 import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.UiText
 import io.relavr.sender.core.model.VideoStreamProfile
-import io.relavr.sender.core.session.AudioCaptureSource
 import io.relavr.sender.core.session.ProjectionAccess
-import io.relavr.sender.core.session.PublishStartResult
 import io.relavr.sender.core.session.RtcPublishSession
 import io.relavr.sender.core.session.RtcPublisherFactory
 import io.relavr.sender.core.session.RtcSessionEvent
@@ -33,8 +30,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withTimeout
-import org.webrtc.AudioSource
-import org.webrtc.AudioTrack
 import org.webrtc.DefaultVideoDecoderFactory
 import org.webrtc.DefaultVideoEncoderFactory
 import org.webrtc.EglBase
@@ -50,7 +45,6 @@ import org.webrtc.SessionDescription
 import org.webrtc.SurfaceTextureHelper
 import org.webrtc.VideoSource
 import org.webrtc.VideoTrack
-import org.webrtc.audio.JavaAudioDeviceModule
 import java.io.Closeable
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
@@ -85,11 +79,7 @@ private class WebRtcPublishSession(
 ) : RtcPublishSession {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val eventFlow = MutableSharedFlow<RtcSessionEvent>(extraBufferCapacity = 32)
-    private val audioBridge =
-        PlaybackAudioBufferBridge { detail ->
-            eventFlow.tryEmit(RtcSessionEvent.AudioDegraded(detail))
-        }
-    private val runtime = WebRtcRuntime(appContext, libraryInitializer, audioBridge)
+    private val runtime = WebRtcRuntime(appContext, libraryInitializer)
     private val terminalError = CompletableDeferred<SenderError>()
     private val remoteDescriptionReady = CompletableDeferred<Unit>()
     private val peerConnected = CompletableDeferred<Unit>()
@@ -102,17 +92,12 @@ private class WebRtcPublishSession(
     private var videoSource: VideoSource? = null
     private var videoTrack: VideoTrack? = null
     private var videoSender: RtpSender? = null
-    private var webrtcAudioSource: AudioSource? = null
-    private var webrtcAudioTrack: AudioTrack? = null
     private var signalingJob: Job? = null
     private var videoMonitorJob: Job? = null
 
     override val events: Flow<RtcSessionEvent> = eventFlow.asSharedFlow()
 
-    override suspend fun publish(
-        projectionAccess: ProjectionAccess,
-        audioSource: AudioCaptureSource?,
-    ): PublishStartResult {
+    override suspend fun publish(projectionAccess: ProjectionAccess) {
         val initialVideoProfile = config.toVideoStreamProfile()
         val adaptiveVideoProfileController =
             AdaptiveVideoProfileController(
@@ -189,8 +174,6 @@ private class WebRtcPublishSession(
             profile = initialVideoProfile,
         )
 
-        val audioPublishResult = attachAudioTrack(peer, sessionId, capturer, audioSource)
-
         eventFlow.tryEmit(RtcSessionEvent.Status(UiText.of(R.string.sender_status_creating_offer)))
         val rawOffer = peer.awaitCreateOffer()
         val preferredOffer =
@@ -230,53 +213,6 @@ private class WebRtcPublishSession(
                 sender = localVideoSender,
                 controller = adaptiveVideoProfileController,
             )
-        return audioPublishResult
-    }
-
-    private fun attachAudioTrack(
-        peer: PeerConnection,
-        sessionId: String,
-        capturer: ScreenCapturerAndroid,
-        audioSource: AudioCaptureSource?,
-    ): PublishStartResult {
-        if (audioSource == null) {
-            audioBridge.attachSource(null)
-            return PublishStartResult(audioState = AudioStreamState.Disabled)
-        }
-
-        return runCatching {
-            val mediaProjection =
-                capturer.mediaProjection
-                    ?: throw SenderException(SenderError.SessionStartFailed("Screen capture is not ready, so audio capture cannot start."))
-            audioSource.start(mediaProjection)
-            audioBridge.attachSource(audioSource)
-
-            val localAudioSource =
-                runtime.peerConnectionFactory.createAudioSource(MediaConstraints())
-            webrtcAudioSource = localAudioSource
-            val localAudioTrack =
-                runtime.peerConnectionFactory.createAudioTrack(
-                    AUDIO_TRACK_ID,
-                    localAudioSource,
-                )
-            webrtcAudioTrack = localAudioTrack
-            peer.addTrack(localAudioTrack, listOf(sessionId))
-            PublishStartResult(audioState = AudioStreamState.Publishing)
-        }.getOrElse { throwable ->
-            audioBridge.attachSource(null)
-            runCatching {
-                audioSource.close()
-            }
-            logger.error(
-                TAG,
-                "Failed to initialize the WebRTC audio track. Falling back to video-only streaming: ${throwable.message}",
-                throwable,
-            )
-            PublishStartResult(
-                audioState = AudioStreamState.Degraded,
-                audioDetail = UiText.of(R.string.sender_audio_degraded_video_only),
-            )
-        }
     }
 
     private fun observeVideoEncoderHealth(
@@ -575,7 +511,6 @@ private class WebRtcPublishSession(
             return
         }
 
-        audioBridge.attachSource(null)
         signalingJob?.cancel()
         videoMonitorJob?.cancel()
         runBlocking {
@@ -588,12 +523,6 @@ private class WebRtcPublishSession(
         }
         runCatching {
             screenCapturer?.dispose()
-        }
-        runCatching {
-            webrtcAudioTrack?.dispose()
-        }
-        runCatching {
-            webrtcAudioSource?.dispose()
         }
         runCatching {
             videoTrack?.dispose()
@@ -647,7 +576,6 @@ private class WebRtcPublishSession(
     private companion object {
         const val TAG = "WebRtcPublisher"
         const val VIDEO_TRACK_ID = "relavr-video-track"
-        const val AUDIO_TRACK_ID = "relavr-audio-track"
         const val ANSWER_TIMEOUT_MS = 15_000L
         const val CONNECT_TIMEOUT_MS = 10_000L
         const val VIDEO_STATS_POLL_INTERVAL_MS = 1_000L
@@ -657,28 +585,13 @@ private class WebRtcPublishSession(
 private class WebRtcRuntime(
     val appContext: Context,
     private val libraryInitializer: WebRtcLibraryInitializer,
-    audioBridge: PlaybackAudioBufferBridge,
 ) : Closeable {
     val eglBase: EglBase = EglBase.create()
-    private val audioDeviceModule: JavaAudioDeviceModule =
-        JavaAudioDeviceModule
-            .builder(appContext)
-            .setInputSampleRate(AUDIO_SAMPLE_RATE_HZ)
-            .setUseStereoInput(true)
-            .setUseHardwareAcousticEchoCanceler(false)
-            .setUseHardwareNoiseSuppressor(false)
-            .setEnableVolumeLogger(false)
-            .setAudioBufferCallback(audioBridge)
-            .createAudioDeviceModule()
-            .also { module ->
-                module.setAudioRecordEnabled(false)
-            }
 
     val peerConnectionFactory: PeerConnectionFactory by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         libraryInitializer.ensureInitialized()
         PeerConnectionFactory
             .builder()
-            .setAudioDeviceModule(audioDeviceModule)
             .setVideoEncoderFactory(
                 DefaultVideoEncoderFactory(
                     eglBase.eglBaseContext,
@@ -695,15 +608,8 @@ private class WebRtcRuntime(
             peerConnectionFactory.dispose()
         }
         runCatching {
-            audioDeviceModule.release()
-        }
-        runCatching {
             eglBase.release()
         }
-    }
-
-    private companion object {
-        const val AUDIO_SAMPLE_RATE_HZ = 48_000
     }
 }
 

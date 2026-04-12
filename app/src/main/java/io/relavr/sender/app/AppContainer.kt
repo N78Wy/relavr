@@ -8,7 +8,6 @@ import io.relavr.sender.core.session.StreamingSessionController
 import io.relavr.sender.core.session.StreamingSessionCoordinator
 import io.relavr.sender.feature.streamcontrol.StreamControlViewModelFactory
 import io.relavr.sender.platform.androidcapture.AndroidProjectionPermissionGateway
-import io.relavr.sender.platform.androidcapture.PlaybackAudioCaptureSourceFactory
 import io.relavr.sender.platform.mediacodec.AndroidMediaCodecCapabilityRepository
 import io.relavr.sender.platform.mediacodec.DefaultCodecPolicy
 import io.relavr.sender.platform.webrtc.DefaultWebRtcCodecSupportProvider
@@ -24,13 +23,10 @@ class AppContainer(
     private val webRtcLibraryInitializer = WebRtcLibraryInitializer.create(application)
 
     val projectionPermissionGateway = AndroidProjectionPermissionGateway(mediaProjectionManager)
-    internal val recordAudioPermissionGateway = AndroidRecordAudioPermissionGateway(application)
-    internal val recordAudioPermissionPreferenceStore = createRecordAudioPermissionPreferenceStore(application)
 
     internal val sessionEngine: StreamingSessionController =
         StreamingSessionCoordinator(
             projectionPermissionGateway = projectionPermissionGateway,
-            audioCaptureSourceFactory = PlaybackAudioCaptureSourceFactory(application),
             codecCapabilityRepository =
                 CombinedCodecCapabilityRepository(
                     androidCapabilityRepository = AndroidMediaCodecCapabilityRepository(DefaultAppDispatchers),
@@ -53,7 +49,6 @@ class AppContainer(
         ForegroundServiceStreamingSessionController(
             sessionEngine = sessionEngine,
             commandDispatcher = foregroundServiceCommandDispatcher,
-            recordAudioPermissionGateway = recordAudioPermissionGateway,
             dispatchers = DefaultAppDispatchers,
             logger = AndroidAppLogger,
         )

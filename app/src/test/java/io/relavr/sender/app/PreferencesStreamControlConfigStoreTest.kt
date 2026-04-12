@@ -12,8 +12,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
 
@@ -31,7 +29,6 @@ class PreferencesStreamControlConfigStoreTest {
                     resolution = VideoResolution(width = 1920, height = 1080),
                     fps = 60,
                     bitrateKbps = 8000,
-                    audioEnabled = false,
                 )
 
             configStore.save(expected)
@@ -50,7 +47,6 @@ class PreferencesStreamControlConfigStoreTest {
                         RESOLUTION_HEIGHT_KEY to 777,
                         FPS_KEY to 120,
                         BITRATE_KBPS_KEY to 9999,
-                        AUDIO_ENABLED_KEY to false,
                     ),
                 )
             val configStore = PreferencesStreamControlConfigStore(dataStore)
@@ -63,7 +59,6 @@ class PreferencesStreamControlConfigStoreTest {
             assertEquals(StreamConfig.DEFAULT_RESOLUTION, loadedConfig.resolution)
             assertEquals(StreamConfig.DEFAULT_FPS, loadedConfig.fps)
             assertEquals(StreamConfig.DEFAULT_BITRATE_KBPS, loadedConfig.bitrateKbps)
-            assertEquals(false, loadedConfig.audioEnabled)
         }
 
     @Test
@@ -75,29 +70,6 @@ class PreferencesStreamControlConfigStoreTest {
                 )
 
             assertEquals(StreamConfig(), configStore.load())
-        }
-
-    @Test
-    fun `record audio permission request flag persists once marked`() =
-        runTest {
-            val permissionStore = PreferencesRecordAudioPermissionPreferenceStore(FakePreferencesDataStore())
-
-            assertFalse(permissionStore.hasRequestedBefore())
-
-            permissionStore.markRequested()
-
-            assertTrue(permissionStore.hasRequestedBefore())
-        }
-
-    @Test
-    fun `record audio permission request flag falls back to false on io exception`() =
-        runTest {
-            val permissionStore =
-                PreferencesRecordAudioPermissionPreferenceStore(
-                    FailingPreferencesDataStore(IOException("boom")),
-                )
-
-            assertFalse(permissionStore.hasRequestedBefore())
         }
 
     private class FakePreferencesDataStore(

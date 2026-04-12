@@ -10,7 +10,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -19,7 +18,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import io.relavr.sender.core.model.AudioStreamState
 import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.CodecPreference
@@ -27,7 +25,6 @@ import io.relavr.sender.core.model.CodecSelection
 import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
-import io.relavr.sender.core.model.UiText
 import io.relavr.sender.core.model.VideoResolution
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -191,72 +188,7 @@ class StreamControlScreenTest {
     }
 
     @Test
-    fun audio_toggle_works_and_shows_degradation_hints() {
-        var audioEnabled = true
-
-        setStreamControlContent(
-            uiState =
-                buildStreamControlUiState(
-                    config = StreamConfig(signalingEndpoint = VALID_SIGNALING_ENDPOINT),
-                    sessionSnapshot =
-                        StreamingSessionSnapshot(
-                            audioState = AudioStreamState.Degraded,
-                            audioDetail = UiText.of(io.relavr.sender.core.model.R.string.sender_audio_degraded_video_only),
-                        ),
-                ),
-            onAudioEnabledChanged = { audioEnabled = it },
-        )
-
-        composeRule.onNodeWithText("Audio capture degraded. Continuing with video only.").assertIsDisplayed()
-        composeRule.onNodeWithTag(StreamControlTestTags.AUDIO_SWITCH).performClick()
-        assertEquals(false, audioEnabled)
-    }
-
-    @Test
-    fun pending_audio_permission_disables_the_audio_toggle_and_start_button() {
-        setStreamControlContent(
-            uiState =
-                buildStreamControlUiState(
-                    config = validConfig(),
-                    sessionSnapshot = StreamingSessionSnapshot(),
-                    audioPermissionRequestPending = true,
-                ),
-        )
-
-        composeRule.onNodeWithText("Permission requested. Complete the system dialog to continue.").assertIsDisplayed()
-        composeRule.onNodeWithTag(StreamControlTestTags.AUDIO_SWITCH).assertIsNotEnabled()
-        composeRule.onNodeWithTag(StreamControlTestTags.START_BUTTON).assertIsNotEnabled()
-    }
-
-    @Test
-    fun permanently_denied_audio_permission_shows_the_settings_action() {
-        var openSettingsCount = 0
-
-        setStreamControlContent(
-            uiState =
-                buildStreamControlUiState(
-                    config =
-                        StreamConfig(
-                            signalingEndpoint = VALID_SIGNALING_ENDPOINT,
-                            audioEnabled = false,
-                        ),
-                    sessionSnapshot = StreamingSessionSnapshot(),
-                    recordAudioPermissionStatus = RecordAudioPermissionStatus.PermanentlyDenied,
-                ),
-            onOpenAudioPermissionSettingsClicked = { openSettingsCount += 1 },
-        )
-
-        composeRule
-            .onNodeWithText("Audio permission was permanently denied. Open system settings to re-enable audio capture.")
-            .assertIsDisplayed()
-        composeRule.onNodeWithTag(StreamControlTestTags.AUDIO_SWITCH).assertIsNotEnabled()
-        composeRule.onNodeWithTag(StreamControlTestTags.START_BUTTON).assertIsEnabled()
-        composeRule.onNodeWithTag(StreamControlTestTags.AUDIO_PERMISSION_SETTINGS_BUTTON).performClick()
-        assertEquals(1, openSettingsCount)
-    }
-
-    @Test
-    fun codec_options_are_switchable_and_unsupported_ones_stay_disabled() {
+    fun codec_options_are_switchable() {
         var selectedCodec = CodecPreference.H264
 
         setStreamControlContent(
@@ -272,7 +204,6 @@ class StreamControlScreenTest {
                             capabilities =
                                 CapabilitySnapshot(
                                     supportedCodecs = setOf(CodecPreference.H264, CodecPreference.HEVC),
-                                    audioPlaybackCaptureSupported = true,
                                     defaultCodec = CodecPreference.H264,
                                 ),
                         ),
@@ -281,7 +212,6 @@ class StreamControlScreenTest {
         )
 
         composeRule.onNodeWithTag(StreamControlTestTags.codecOption(CodecPreference.HEVC)).performClick()
-        composeRule.onNodeWithTag(StreamControlTestTags.codecOption(CodecPreference.VP9)).assertIsNotEnabled()
         assertEquals(CodecPreference.HEVC, selectedCodec)
     }
 
@@ -362,8 +292,6 @@ class StreamControlScreenTest {
         onSignalingEndpointChanged: (String) -> Unit = {},
         onSessionIdChanged: (String) -> Unit = {},
         onCodecPreferenceChanged: (CodecPreference) -> Unit = {},
-        onAudioEnabledChanged: (Boolean) -> Unit = {},
-        onOpenAudioPermissionSettingsClicked: () -> Unit = {},
         onOpenScannerClicked: () -> Unit = {},
         onResolutionChanged: (VideoResolution) -> Unit = {},
         onFpsChanged: (Int) -> Unit = {},
@@ -380,8 +308,6 @@ class StreamControlScreenTest {
                     onSignalingEndpointChanged = onSignalingEndpointChanged,
                     onSessionIdChanged = onSessionIdChanged,
                     onCodecPreferenceChanged = onCodecPreferenceChanged,
-                    onAudioEnabledChanged = onAudioEnabledChanged,
-                    onOpenAudioPermissionSettingsClicked = onOpenAudioPermissionSettingsClicked,
                     onOpenScannerClicked = onOpenScannerClicked,
                     onResolutionChanged = onResolutionChanged,
                     onFpsChanged = onFpsChanged,

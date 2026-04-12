@@ -9,12 +9,9 @@ import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.UiText
 import io.relavr.sender.core.model.VideoResolution
 import io.relavr.sender.core.session.StreamingSessionController
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -30,29 +27,18 @@ class StreamControlViewModel(
 ) : ViewModel() {
     private val config = MutableStateFlow(initialConfig)
     private val qrScannerState = MutableStateFlow(QrScannerState())
-    private val audioPermissionRequestPending = MutableStateFlow(false)
-    private val recordAudioPermissionStatus = MutableStateFlow<RecordAudioPermissionStatus?>(null)
-    private val _recordAudioPermissionRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private var hasLocalEdits = false
-    private var hasLoadedPersistedConfig = false
-    private var shouldEnableAudioAfterPermission = false
-
-    val recordAudioPermissionRequests: SharedFlow<Unit> = _recordAudioPermissionRequests.asSharedFlow()
 
     val uiState: StateFlow<StreamControlUiState> =
         combine(
             config,
             qrScannerState,
             sessionController.observeState(),
-            audioPermissionRequestPending,
-            recordAudioPermissionStatus,
-        ) { currentConfig, currentQrScannerState, sessionState, isAudioPermissionRequestPending, currentRecordAudioPermissionStatus ->
+        ) { currentConfig, currentQrScannerState, sessionState ->
             buildStreamControlUiState(
                 config = currentConfig,
                 scannerState = currentQrScannerState,
                 sessionSnapshot = sessionState,
-                audioPermissionRequestPending = isAudioPermissionRequestPending,
-                recordAudioPermissionStatus = currentRecordAudioPermissionStatus,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -62,8 +48,6 @@ class StreamControlViewModel(
                     config = initialConfig,
                     scannerState = qrScannerState.value,
                     sessionSnapshot = sessionController.observeState().value,
-                    audioPermissionRequestPending = audioPermissionRequestPending.value,
-                    recordAudioPermissionStatus = recordAudioPermissionStatus.value,
                 ),
         )
 
@@ -75,8 +59,6 @@ class StreamControlViewModel(
             if (!hasLocalEdits) {
                 config.value = persistedConfig
             }
-            hasLoadedPersistedConfig = true
-            maybeRequestRecordAudioPermissionForEnabledAudio()
             sessionController.refreshCapabilities()
         }
         viewModelScope.launch {
@@ -118,64 +100,6 @@ class StreamControlViewModel(
         updateConfig { current ->
             current.copy(codecPreference = codecPreference)
         }
-    }
-
-    fun onAudioToggleRequested(enabled: Boolean) {
-        if (!enabled) {
-            shouldEnableAudioAfterPermission = false
-            audioPermissionRequestPending.value = false
-            updateConfig { current ->
-                current.copy(audioEnabled = false)
-            }
-            return
-        }
-
-        if (recordAudioPermissionStatus.value == RecordAudioPermissionStatus.Granted) {
-            updateConfig { current ->
-                current.copy(audioEnabled = true)
-            }
-            return
-        }
-
-        if (recordAudioPermissionStatus.value == RecordAudioPermissionStatus.PermanentlyDenied) {
-            shouldEnableAudioAfterPermission = false
-            updateConfig { current ->
-                current.copy(audioEnabled = false)
-            }
-            return
-        }
-
-        shouldEnableAudioAfterPermission = true
-        requestRecordAudioPermission()
-    }
-
-    fun onRecordAudioPermissionSnapshot(status: RecordAudioPermissionStatus) {
-        recordAudioPermissionStatus.value = status
-        audioPermissionRequestPending.value = false
-        if (status == RecordAudioPermissionStatus.PermanentlyDenied && config.value.audioEnabled) {
-            shouldEnableAudioAfterPermission = false
-            updateConfig { current ->
-                current.copy(audioEnabled = false)
-            }
-        }
-        maybeRequestRecordAudioPermissionForEnabledAudio()
-    }
-
-    fun onRecordAudioPermissionResolved(status: RecordAudioPermissionStatus) {
-        recordAudioPermissionStatus.value = status
-        audioPermissionRequestPending.value = false
-        if (status == RecordAudioPermissionStatus.Granted) {
-            if (shouldEnableAudioAfterPermission) {
-                updateConfig { current ->
-                    current.copy(audioEnabled = true)
-                }
-            }
-        } else {
-            updateConfig { current ->
-                current.copy(audioEnabled = false)
-            }
-        }
-        shouldEnableAudioAfterPermission = false
     }
 
     fun onOpenScannerClicked() {
@@ -285,27 +209,6 @@ class StreamControlViewModel(
     private fun persistConfig(updatedConfig: StreamConfig) {
         viewModelScope.launch {
             runCatching { configStore.save(updatedConfig) }
-        }
-    }
-
-    private fun maybeRequestRecordAudioPermissionForEnabledAudio() {
-        if (!hasLoadedPersistedConfig || config.value.audioEnabled.not()) {
-            return
-        }
-        if (recordAudioPermissionStatus.value != RecordAudioPermissionStatus.Requestable) {
-            return
-        }
-        shouldEnableAudioAfterPermission = true
-        requestRecordAudioPermission()
-    }
-
-    private fun requestRecordAudioPermission() {
-        if (audioPermissionRequestPending.value) {
-            return
-        }
-        audioPermissionRequestPending.value = true
-        viewModelScope.launch {
-            _recordAudioPermissionRequests.emit(Unit)
         }
     }
 }

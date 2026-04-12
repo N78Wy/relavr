@@ -4,7 +4,11 @@
 ## Android 文档
 `android/architecture.md` - 多模块边界、依赖方向、构建约束与测试基线；修改模块结构或公共接口时必读。
 
+## 当前任务文档
+- 当前无进行中的任务文档。
+
 ## 已完成任务文档
+`workflow/done/260412-remove-audio-streaming.md` - 已移除 sender 音频采集、录音权限、音轨发布、音频 UI 与相关测试，当前版本固定为纯视频推流。
 `workflow/done/260412-fix-audio-permission-permanent-denial.md` - 已修复 sender 在录音权限“拒绝且不再提醒”后没有恢复入口的问题，记录权限三态、设置引导与验证结果。
 `workflow/done/260412-fix-audio-permission-reprompt.md` - 已修复 sender 音频开关在首次拒绝录音权限后无法再次触发授权的问题，记录权限状态机、app 层兜底与验收结果。
 `workflow/done/260412-receiver-connect-v2-wss.md` - 已将 sender 扫码协议升级到 receiver-connect v2，支持从二维码精确恢复 ws / wss 与 signaling path。
@@ -34,7 +38,7 @@
 - 默认推流策略固定为 H.264 优先；若当前设备或 libwebrtc 不支持 H.264，则按 HEVC、VP8、VP9 顺序回退。发送控制台支持在开播前切换编码偏好，推流中保持锁定。
 - 首阶段 sender 建链协议固定为 `WebSocket + JSON Offer/Answer`，发送控制台必须提供 `signalingEndpoint` 与 `sessionId` 输入。
 - sender 扫码自动连接当前固定镜像 `relavr-view` 的 `receiver-connect v2` 协议，载荷包含 `scheme/path`；扫码后必须精确恢复二维码里的完整 `ws/wss` signaling 地址。
-- sender 音频默认开启，固定通过 `AudioPlaybackCapture` 采集系统播放音频；首次进入默认开启且未授权时必须自动请求 `RECORD_AUDIO`，用户再次手动打开音频开关时也必须继续重试授权；如果用户已经选择“拒绝且不再提醒”，发送控制台必须改为提供系统设置恢复入口，并依赖本地“已请求过权限”标记区分首次未请求与永久拒绝；若缺少 `RECORD_AUDIO`、设备不支持或运行时读取失败，必须降级为仅视频/静音而不能打断推流会话。
+- 当前版本 sender 仅支持视频推流；不申请 `RECORD_AUDIO`、不暴露音频开关，也不保留系统音频采集与音轨发布链路。
 - sender 视频规格继续允许在开播前自由选择，但运行时必须区分用户请求的 requested profile 与实际生效的 active profile；若检测到硬编持续过载，允许在同一会话内按预设梯度自动降档，并在最低档仍无法稳定时主动结束会话，避免编码积压导致 OOM。
 - 提交前必须至少执行 `./gradlew spotlessCheck`、`./gradlew lintDebug`、`./gradlew testDebugUnitTest`。
 - 如改动 `demo/browser-preview`，还必须执行 `npm run format:check`、`npm run lint`、`npm run test`。
