@@ -37,6 +37,7 @@
 - 当前发送控制台和扫码链路都必须接受 `ws://` 与 `wss://` 两类 signaling 地址：Android receiver 继续以 `ws://` 为主，部署到 HTTPS 的 browser-preview 可回填 `wss://`；如后续要强制全站只保留 `wss://`，必须同步收紧 manifest 策略并更新回归测试。
 - 运行时音频异常只允许降级到静音/仅视频，不做中途 renegotiation；会话主状态继续保持推流中，音频细节通过独立的 `audioState` / `audioDetail` 对外暴露。
 - sender app 现已固定支持 `English` 与 `简体中文` 两种界面语言；首次启动跟随系统，用户手动切换后由 `AppCompat` locale 持久化恢复。
+- 只要 `MainActivity` 继续继承 `AppCompatActivity` 且语言切换仍依赖 `AppCompat` locale，`app` 启动主题就必须保持 `AppCompat` 兼容父主题，不能回退到 `@android:style/Theme.DeviceDefault.*` 等非 `AppCompat` 主题，否则会在 `setContent` 前直接启动崩溃。
 - 所有用户可见文案、错误原因与会话状态细节都必须通过 `UiText` 或等价语义类型表达，`ViewModel`、会话快照与错误模型不得缓存最终展示字符串，避免语言切换后残留旧 locale 文案。
 - `demo/browser-preview` 只支持单个 `sessionId` 下的一发一收；sender 可先于 receiver 启动，服务端负责缓存最新 `offer` 与 sender 侧 ICE candidate，供后加入的浏览器补齐建链；receiver 页面会尝试自动播放远端音视频，并在被浏览器拦截时提示用户手动恢复声音。
 
