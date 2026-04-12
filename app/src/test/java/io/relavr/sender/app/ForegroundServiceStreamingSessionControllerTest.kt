@@ -21,7 +21,7 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class ForegroundServiceStreamingSessionControllerTest {
     @Test
-    fun `start 只发送前台服务命令并写入准备状态`() =
+    fun `start sends only the foreground service command and writes the preparing state`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val engine = FakeStreamingSessionController()
@@ -59,7 +59,7 @@ class ForegroundServiceStreamingSessionControllerTest {
         }
 
     @Test
-    fun `stop 只发送停止命令并写入停止状态`() =
+    fun `stop sends only the stop command and writes the stopping state`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val engine =
@@ -95,7 +95,7 @@ class ForegroundServiceStreamingSessionControllerTest {
         }
 
     @Test
-    fun `底层会话状态变化会同步到服务控制器`() =
+    fun `session engine state changes are mirrored into the service controller`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val engine = FakeStreamingSessionController()
@@ -126,7 +126,7 @@ class ForegroundServiceStreamingSessionControllerTest {
         }
 
     @Test
-    fun `前台服务命令分发失败时写入错误状态`() =
+    fun `foreground service command dispatch failures write an error state`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val logger = FakeAppLogger()
@@ -156,7 +156,7 @@ class ForegroundServiceStreamingSessionControllerTest {
         }
 
     @Test
-    fun `音频开启时会先请求录音权限`() =
+    fun `record-audio permission is requested before audio is enabled`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val recordAudioPermissionGateway = FakeRecordAudioPermissionGateway()

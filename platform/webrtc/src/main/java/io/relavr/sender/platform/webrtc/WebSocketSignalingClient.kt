@@ -54,7 +54,7 @@ class WebSocketSignalingClient(
                 else ->
                     SenderException(
                         SenderError.SignalingFailed(
-                            throwable.message ?: "信令连接建立失败",
+                            throwable.message ?: "The signaling connection could not be established.",
                         ),
                     )
             }
@@ -114,13 +114,14 @@ private class WebSocketSignalingSession(
                 }.onFailure { throwable ->
                     logger.error(
                         TAG,
-                        "收到无法解析的信令消息: ${throwable.message}",
+                        "Received an unreadable signaling message: ${throwable.message}",
                         throwable,
                     )
                     incomingMessages.tryEmit(
                         SignalingMessage.Error(
                             sessionId = expectedSessionId,
-                            message = "收到无法解析的信令消息",
+                            code = "invalid-signaling-message",
+                            message = "Received an unreadable signaling message.",
                         ),
                     )
                 }
@@ -146,12 +147,13 @@ private class WebSocketSignalingSession(
                     incomingMessages.tryEmit(
                         SignalingMessage.Error(
                             sessionId = expectedSessionId,
-                            message = reason.ifBlank { "信令连接已关闭" },
+                            code = "signaling-closed",
+                            message = reason.ifBlank { "The signaling connection was closed." },
                         ),
                     )
                     if (!opened.isCompleted) {
                         opened.completeExceptionally(
-                            SenderException(SenderError.SignalingFailed("信令连接已关闭")),
+                            SenderException(SenderError.SignalingFailed("The signaling connection was closed.")),
                         )
                     }
                 }
@@ -166,11 +168,12 @@ private class WebSocketSignalingSession(
                     return
                 }
 
-                val message = t.message ?: "WebSocket 信令连接失败"
+                val message = t.message ?: "The WebSocket signaling connection failed."
                 logger.error(TAG, message, t)
                 incomingMessages.tryEmit(
                     SignalingMessage.Error(
                         sessionId = expectedSessionId,
+                        code = "websocket-failure",
                         message = message,
                     ),
                 )
@@ -184,15 +187,15 @@ private class WebSocketSignalingSession(
 
     override suspend fun send(message: SignalingMessage) {
         if (closed) {
-            throw SenderException(SenderError.SignalingFailed("信令连接已关闭"))
+            throw SenderException(SenderError.SignalingFailed("The signaling connection was closed."))
         }
         val socket =
             webSocket
-                ?: throw SenderException(SenderError.SignalingFailed("信令连接尚未建立"))
+                ?: throw SenderException(SenderError.SignalingFailed("The signaling connection has not been established yet."))
 
         val sent = socket.send(JsonSignalingMessageCodec.encode(message))
         if (!sent) {
-            throw SenderException(SenderError.SignalingFailed("发送信令消息失败"))
+            throw SenderException(SenderError.SignalingFailed("Sending the signaling message failed."))
         }
     }
 

@@ -8,6 +8,7 @@ import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.CodecSelection
 import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
+import io.relavr.sender.core.model.UiText
 import kotlinx.coroutines.flow.Flow
 import java.io.Closeable
 import java.nio.ByteBuffer
@@ -93,7 +94,8 @@ sealed interface SignalingMessage {
 
     data class Error(
         override val sessionId: String,
-        val message: String,
+        val code: String? = null,
+        val message: String? = null,
     ) : SignalingMessage
 }
 
@@ -109,7 +111,7 @@ fun interface SignalingClient {
 
 sealed interface RtcSessionEvent {
     data class Status(
-        val detail: String,
+        val detail: UiText,
     ) : RtcSessionEvent
 
     data class Failure(
@@ -118,10 +120,11 @@ sealed interface RtcSessionEvent {
 
     data class CaptureInterrupted(
         val reason: String,
+        val uiText: UiText = SenderError.CaptureInterrupted(reason).uiText,
     ) : RtcSessionEvent
 
     data class AudioDegraded(
-        val detail: String,
+        val detail: UiText,
     ) : RtcSessionEvent
 
     data object Disconnected : RtcSessionEvent
@@ -129,7 +132,7 @@ sealed interface RtcSessionEvent {
 
 data class PublishStartResult(
     val audioState: AudioStreamState,
-    val audioDetail: String? = null,
+    val audioDetail: UiText? = null,
 )
 
 interface RtcPublishSession : Closeable {

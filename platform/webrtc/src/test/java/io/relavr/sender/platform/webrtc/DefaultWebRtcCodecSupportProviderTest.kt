@@ -6,7 +6,7 @@ import org.junit.Test
 
 class DefaultWebRtcCodecSupportProviderTest {
     @Test
-    fun `getSupportedCodecs 会先初始化 native 再读取编码列表`() {
+    fun `getSupportedCodecs initializes native code before reading codec names`() {
         val callOrder = mutableListOf<String>()
         val initializer =
             WebRtcLibraryInitializer {

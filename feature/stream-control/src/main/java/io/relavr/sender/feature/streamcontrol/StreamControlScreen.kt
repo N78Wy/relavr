@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -42,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
+import io.relavr.sender.core.model.UiText
 import io.relavr.sender.core.model.VideoResolution
 
 object StreamControlTestTags {
@@ -71,6 +73,8 @@ private enum class StreamControlLayoutMode {
 @Composable
 fun streamControlScreen(
     uiState: StreamControlUiState,
+    selectedLanguageTag: String,
+    onLanguageTagSelected: (String) -> Unit,
     onSignalingEndpointChanged: (String) -> Unit,
     onSessionIdChanged: (String) -> Unit,
     onCodecPreferenceChanged: (CodecPreference) -> Unit,
@@ -129,6 +133,8 @@ fun streamControlScreen(
                     title = uiState.title,
                     statusLabel = uiState.statusLabel,
                     statusDescription = uiState.statusDescription,
+                    selectedLanguageTag = selectedLanguageTag,
+                    onLanguageTagSelected = onLanguageTagSelected,
                 )
 
                 if (layoutMode == StreamControlLayoutMode.Expanded) {
@@ -205,28 +211,35 @@ fun streamControlScreen(
 
 @Composable
 private fun heroCard(
-    title: String,
-    statusLabel: String,
-    statusDescription: String,
+    title: UiText,
+    statusLabel: UiText,
+    statusDescription: UiText,
+    selectedLanguageTag: String,
+    onLanguageTagSelected: (String) -> Unit,
 ) {
     surfaceCard {
         Text(
-            text = title,
+            text = title.resolve(),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(modifier = Modifier.height(10.dp))
         Text(
-            text = statusLabel,
+            text = statusLabel.resolve(),
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.primary,
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = statusDescription,
+            text = statusDescription.resolve(),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        languageSelector(
+            selectedLanguageTag = selectedLanguageTag,
+            onLanguageTagSelected = onLanguageTagSelected,
         )
     }
 }
@@ -243,14 +256,14 @@ private fun configCard(
 ) {
     surfaceCard {
         Text(
-            text = "发送配置",
+            text = stringResource(R.string.stream_control_config_title),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = "视频编码",
+            text = stringResource(R.string.stream_control_codec_title),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -265,7 +278,7 @@ private fun configCard(
         }
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = uiState.codecStatusLabel,
+            text = uiState.codecStatusLabel.resolve(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -273,8 +286,8 @@ private fun configCard(
         OutlinedTextField(
             value = uiState.signalingEndpoint,
             onValueChange = onSignalingEndpointChanged,
-            label = { Text("WebSocket 地址") },
-            placeholder = { Text("例如 ws://192.168.1.20:8080/ws") },
+            label = { Text(stringResource(R.string.stream_control_endpoint_label)) },
+            placeholder = { Text(stringResource(R.string.stream_control_endpoint_placeholder)) },
             singleLine = true,
             enabled = uiState.configEditable,
             colors = streamTextFieldColors(),
@@ -285,7 +298,7 @@ private fun configCard(
         )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = "Quest 3 实机请填写开发机局域网地址，例如 ws://192.168.1.20:8080/ws；10.0.2.2 仅适用于 Android 模拟器。",
+            text = stringResource(R.string.stream_control_endpoint_hint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -298,11 +311,11 @@ private fun configCard(
                     .fillMaxWidth()
                     .testTag(StreamControlTestTags.SCAN_BUTTON),
         ) {
-            Text("扫码连接接收端")
+            Text(stringResource(R.string.stream_control_scan_button))
         }
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = uiState.scanStatusLabel,
+            text = uiState.scanStatusLabel.resolve(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -321,7 +334,7 @@ private fun configCard(
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "ICE 默认使用 Google STUN，可在后续阶段扩展 TURN / 鉴权。",
+            text = stringResource(R.string.stream_control_ice_hint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -361,16 +374,16 @@ private fun configCard(
 }
 
 @Composable
-private fun audioSummary(audioStatusLabel: String) {
+private fun audioSummary(audioStatusLabel: UiText) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
-            text = "音频采集",
+            text = stringResource(R.string.stream_control_audio_switch_label),
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            text = audioStatusLabel,
+            text = audioStatusLabel.resolve(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -407,7 +420,7 @@ private fun codecOptionButton(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = "已选中 · ${option.supportLabel}",
+                    text = option.supportLabel.resolve(),
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -430,7 +443,7 @@ private fun codecOptionButton(
                     fontWeight = FontWeight.Medium,
                 )
                 Text(
-                    text = option.supportLabel,
+                    text = option.supportLabel.resolve(),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -448,34 +461,34 @@ private fun streamProfileCard(
 ) {
     surfaceCard(modifier = Modifier.testTag(StreamControlTestTags.STREAM_PROFILE_CARD)) {
         Text(
-            text = "视频规格",
+            text = stringResource(R.string.stream_control_profile_title),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = "当前规格：${uiState.streamProfileSummary}",
+            text = uiState.streamProfileSummary.resolve(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(16.dp))
         selectionGroup(
-            title = "分辨率",
+            title = "Resolution",
             options = uiState.resolutionOptions,
             tagOf = StreamControlTestTags::resolutionOption,
             onSelected = onResolutionChanged,
         )
         Spacer(modifier = Modifier.height(16.dp))
         selectionGroup(
-            title = "帧率",
+            title = "Frame Rate",
             options = uiState.fpsOptions,
             tagOf = StreamControlTestTags::fpsOption,
             onSelected = onFpsChanged,
         )
         Spacer(modifier = Modifier.height(16.dp))
         selectionGroup(
-            title = "码率",
+            title = "Bitrate",
             options = uiState.bitrateOptions,
             tagOf = StreamControlTestTags::bitrateOption,
             onSelected = onBitrateChanged,
@@ -570,14 +583,14 @@ private fun actionCard(
 ) {
     surfaceCard {
         Text(
-            text = "会话控制",
+            text = stringResource(R.string.stream_control_title),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = "开始后会先请求 MediaProjection 授权，再进入 WebRTC 建链。",
+            text = stringResource(io.relavr.sender.core.model.R.string.sender_status_permission_requested),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -592,7 +605,7 @@ private fun actionCard(
                             .fillMaxWidth()
                             .testTag(StreamControlTestTags.START_BUTTON),
                 ) {
-                    Text("开始推流")
+                    Text(stringResource(R.string.stream_control_start_button))
                 }
                 OutlinedButton(
                     onClick = onStopClicked,
@@ -602,7 +615,7 @@ private fun actionCard(
                             .fillMaxWidth()
                             .testTag(StreamControlTestTags.STOP_BUTTON),
                 ) {
-                    Text("停止")
+                    Text(stringResource(R.string.stream_control_stop_button))
                 }
             }
         } else {
@@ -618,7 +631,7 @@ private fun actionCard(
                             .weight(1f)
                             .testTag(StreamControlTestTags.START_BUTTON),
                 ) {
-                    Text("开始推流")
+                    Text(stringResource(R.string.stream_control_start_button))
                 }
                 OutlinedButton(
                     onClick = onStopClicked,
@@ -628,7 +641,7 @@ private fun actionCard(
                             .weight(1f)
                             .testTag(StreamControlTestTags.STOP_BUTTON),
                 ) {
-                    Text("停止")
+                    Text(stringResource(R.string.stream_control_stop_button))
                 }
             }
         }
@@ -636,7 +649,7 @@ private fun actionCard(
 }
 
 @Composable
-private fun errorCard(message: String) {
+private fun errorCard(message: UiText) {
     Card(
         colors =
             CardDefaults.cardColors(
@@ -646,20 +659,68 @@ private fun errorCard(message: String) {
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Text(
-                text = "异常",
+                text = stringResource(R.string.stream_control_error_title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = message,
+                text = message.resolve(),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
         }
     }
 }
+
+@Composable
+private fun languageSelector(
+    selectedLanguageTag: String,
+    onLanguageTagSelected: (String) -> Unit,
+) {
+    Text(
+        text = stringResource(R.string.stream_control_language_label),
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Medium,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        languageButton(
+            selected = selectedLanguageTag == "en",
+            label = stringResource(R.string.stream_control_language_english),
+        ) {
+            onLanguageTagSelected("en")
+        }
+        languageButton(
+            selected = selectedLanguageTag == "zh-CN",
+            label = stringResource(R.string.stream_control_language_simplified_chinese),
+        ) {
+            onLanguageTagSelected("zh-CN")
+        }
+    }
+}
+
+@Composable
+private fun languageButton(
+    selected: Boolean,
+    label: String,
+    onClick: () -> Unit,
+) {
+    if (selected) {
+        Button(onClick = onClick) {
+            Text(label)
+        }
+    } else {
+        OutlinedButton(onClick = onClick) {
+            Text(label)
+        }
+    }
+}
+
+@Composable
+private fun UiText.resolve(): String = stringResource(resId, *args.toTypedArray())
 
 @Composable
 private fun surfaceCard(
@@ -718,6 +779,8 @@ private fun streamControlScreenPreview() {
                 config = StreamConfig(),
                 sessionSnapshot = StreamingSessionSnapshot(),
             ),
+        selectedLanguageTag = "en",
+        onLanguageTagSelected = {},
         onSignalingEndpointChanged = {},
         onSessionIdChanged = {},
         onCodecPreferenceChanged = {},

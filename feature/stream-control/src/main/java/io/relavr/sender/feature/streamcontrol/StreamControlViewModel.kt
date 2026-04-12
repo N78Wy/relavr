@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.ReceiverConnectPayloadCodec
 import io.relavr.sender.core.model.StreamConfig
+import io.relavr.sender.core.model.UiText
 import io.relavr.sender.core.model.VideoResolution
 import io.relavr.sender.core.session.StreamingSessionController
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -108,7 +109,7 @@ class StreamControlViewModel(
         }
     }
 
-    fun onScannerFailed(message: String) {
+    fun onScannerFailed(message: UiText) {
         qrScannerState.update { current ->
             current.copy(visible = false, errorMessage = message)
         }
@@ -117,8 +118,8 @@ class StreamControlViewModel(
     fun onScannerPayloadReceived(payload: String) {
         val connectionInfo =
             runCatching { ReceiverConnectPayloadCodec.decode(payload) }
-                .getOrElse { throwable ->
-                    onScannerFailed(throwable.message ?: "二维码解析失败")
+                .getOrElse {
+                    onScannerFailed(UiText.of(R.string.stream_control_scan_parse_failed))
                     return
                 }
 

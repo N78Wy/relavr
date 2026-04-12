@@ -34,6 +34,8 @@
 - 所有会实例化 `DefaultVideoEncoderFactory`、`PeerConnectionFactory` 或其他直接进入 `org.webrtc` native 方法的实现，都必须先复用共享 `WebRtcLibraryInitializer` 执行一次性初始化；禁止把 `PeerConnectionFactory.initialize(...)` 藏在单个调用点的私有细节里并假设其他路径不会提前访问 JNI。
 - 当前联调版本在应用层允许 `ws://` 明文信令，以兼容 Android 模拟器 `10.0.2.2` 和开发机局域网地址；如后续切换为 `wss://`，必须同步收紧 manifest 策略并更新对应回归测试。
 - 运行时音频异常只允许降级到静音/仅视频，不做中途 renegotiation；会话主状态继续保持推流中，音频细节通过独立的 `audioState` / `audioDetail` 对外暴露。
+- sender app 现已固定支持 `English` 与 `简体中文` 两种界面语言；首次启动跟随系统，用户手动切换后由 `AppCompat` locale 持久化恢复。
+- 所有用户可见文案、错误原因与会话状态细节都必须通过 `UiText` 或等价语义类型表达，`ViewModel`、会话快照与错误模型不得缓存最终展示字符串，避免语言切换后残留旧 locale 文案。
 - `demo/browser-preview` 只支持单个 `sessionId` 下的一发一收；sender 可先于 receiver 启动，服务端负责缓存最新 `offer` 与 sender 侧 ICE candidate，供后加入的浏览器补齐建链；receiver 页面会尝试自动播放远端音视频，并在被浏览器拦截时提示用户手动恢复声音。
 
 ## 测试基线

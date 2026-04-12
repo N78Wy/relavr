@@ -6,7 +6,7 @@ import org.junit.Test
 
 class JsonSignalingMessageCodecTest {
     @Test
-    fun `offer 消息可以完成编解码`() {
+    fun `offer messages round trip through the codec`() {
         val encoded =
             JsonSignalingMessageCodec.encode(
                 SignalingMessage.Offer(
@@ -21,7 +21,7 @@ class JsonSignalingMessageCodecTest {
     }
 
     @Test(expected = IllegalArgumentException::class)
-    fun `缺少必要字段时解码失败`() {
+    fun `decoding fails when required fields are missing`() {
         JsonSignalingMessageCodec.decode("""{"type":"answer","sessionId":"room-1"}""")
     }
 }

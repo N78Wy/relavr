@@ -36,7 +36,7 @@ class StreamControlViewModelTest {
     }
 
     @Test
-    fun `初始化后加载能力并更新配置`() =
+    fun `initialization loads capabilities and updates the configuration`() =
         runTest(dispatcher.scheduler) {
             val controller = FakeStreamingSessionController()
             val viewModel = StreamControlViewModel(sessionController = controller)
@@ -56,7 +56,7 @@ class StreamControlViewModelTest {
         }
 
     @Test
-    fun `开始推流前会带上用户填写的信令配置`() =
+    fun `starting a stream forwards the user supplied signaling configuration`() =
         runTest(dispatcher.scheduler) {
             val controller = FakeStreamingSessionController()
             val viewModel = StreamControlViewModel(sessionController = controller)
@@ -81,7 +81,7 @@ class StreamControlViewModelTest {
         }
 
     @Test
-    fun `扫码成功后会自动回填连接信息并立即开始推流`() =
+    fun `a successful qr scan autofills the connection info and starts streaming immediately`() =
         runTest(dispatcher.scheduler) {
             val controller = FakeStreamingSessionController()
             val viewModel = StreamControlViewModel(sessionController = controller)
@@ -113,13 +113,13 @@ class StreamControlViewModelTest {
             assertEquals(8000, controller.lastStartConfig?.bitrateKbps)
             assertFalse(controller.lastStartConfig?.audioEnabled ?: true)
             assertTrue(
-                viewModel.uiState.value.scanStatusLabel
+                viewModel.uiState.value.scanStatusLabel.args
                     .contains("Living Room"),
             )
         }
 
     @Test
-    fun `非法二维码不会污染配置也不会触发开播`() =
+    fun `an invalid qr code does not overwrite config or trigger streaming`() =
         runTest(dispatcher.scheduler) {
             val controller = FakeStreamingSessionController()
             val viewModel = StreamControlViewModel(sessionController = controller)
@@ -132,14 +132,11 @@ class StreamControlViewModelTest {
             assertEquals(0, controller.startCount)
             assertEquals("ws://keep.example/ws", viewModel.uiState.value.signalingEndpoint)
             assertEquals("keep-room", viewModel.uiState.value.sessionId)
-            assertTrue(
-                viewModel.uiState.value.scanStatusLabel
-                    .contains("JSON"),
-            )
+            assertEquals(R.string.stream_control_scan_parse_failed, viewModel.uiState.value.scanStatusLabel.resId)
         }
 
     @Test
-    fun `能力刷新后会把无效编码归一到默认编码`() =
+    fun `capability refresh normalizes unsupported codecs to the device default`() =
         runTest(dispatcher.scheduler) {
             val controller =
                 FakeStreamingSessionController(
@@ -160,6 +157,7 @@ class StreamControlViewModelTest {
 
             val state = viewModel.uiState.value
             assertEquals(CodecPreference.HEVC, state.codecOptions.single { it.selected }.preference)
-            assertEquals("当前选择为设备推荐默认：H.265 / HEVC", state.codecStatusLabel)
+            assertEquals(R.string.stream_control_codec_device_default, state.codecStatusLabel.resId)
+            assertEquals(listOf(CodecPreference.HEVC.displayName), state.codecStatusLabel.args)
         }
 }

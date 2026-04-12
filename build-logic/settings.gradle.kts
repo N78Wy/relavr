@@ -7,7 +7,7 @@ pluginManagement {
 }
 
 plugins {
-    // included build 也需要单独声明 toolchain 解析器，否则 build-logic 会先于主工程失败。
+    // The included build also needs its own toolchain resolver; otherwise build-logic fails before the main build.
     id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
 }
 

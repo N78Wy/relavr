@@ -6,7 +6,7 @@ import org.junit.Test
 
 class StreamConfigTest {
     @Test
-    fun `默认规格使用受控候选值`() {
+    fun `default profiles use controlled candidate values`() {
         val config = StreamConfig()
 
         assertEquals(StreamConfig.DEFAULT_RESOLUTION, config.resolution)
@@ -25,18 +25,21 @@ class StreamConfigTest {
     }
 
     @Test
-    fun `默认信令地址为空且需要用户填写`() {
+    fun `default signaling endpoint is empty and requires user input`() {
         val config = StreamConfig()
 
         assertEquals("", config.signalingEndpoint)
         assertEquals(
-            SenderError.InvalidConfig("WebSocket 地址不能为空"),
+            SenderError.InvalidConfig(
+                message = "The WebSocket endpoint is required.",
+                uiText = UiText.of(R.string.sender_error_signaling_endpoint_required),
+            ),
             config.validationError(),
         )
     }
 
     @Test
-    fun `ws和wss信令地址都通过校验`() {
+    fun `ws and wss signaling endpoints pass validation`() {
         assertNull(
             StreamConfig(signalingEndpoint = "ws://192.168.1.20:8080/ws").validationError(),
         )
@@ -46,33 +49,45 @@ class StreamConfigTest {
     }
 
     @Test
-    fun `非法协议会返回明确错误`() {
+    fun `invalid schemes return a clear error`() {
         val config = StreamConfig(signalingEndpoint = "https://signal.example/ws")
 
         assertEquals(
-            SenderError.InvalidConfig("WebSocket 地址必须使用 ws:// 或 wss://"),
+            SenderError.InvalidConfig(
+                message = "The WebSocket endpoint must use ws:// or wss://.",
+                uiText = UiText.of(R.string.sender_error_signaling_endpoint_scheme_invalid),
+            ),
             config.validationError(),
         )
     }
 
     @Test
-    fun `非法规格会返回明确错误`() {
+    fun `invalid profiles return clear errors`() {
         assertEquals(
-            SenderError.InvalidConfig("分辨率不在支持列表内"),
+            SenderError.InvalidConfig(
+                message = "The selected resolution is not supported.",
+                uiText = UiText.of(R.string.sender_error_resolution_unsupported),
+            ),
             StreamConfig(
                 resolution = VideoResolution(width = 1024, height = 768),
                 signalingEndpoint = "ws://192.168.1.20:8080/ws",
             ).validationError(),
         )
         assertEquals(
-            SenderError.InvalidConfig("帧率不在支持列表内"),
+            SenderError.InvalidConfig(
+                message = "The selected frame rate is not supported.",
+                uiText = UiText.of(R.string.sender_error_fps_unsupported),
+            ),
             StreamConfig(
                 fps = 29,
                 signalingEndpoint = "ws://192.168.1.20:8080/ws",
             ).validationError(),
         )
         assertEquals(
-            SenderError.InvalidConfig("码率不在支持列表内"),
+            SenderError.InvalidConfig(
+                message = "The selected bitrate is not supported.",
+                uiText = UiText.of(R.string.sender_error_bitrate_unsupported),
+            ),
             StreamConfig(
                 bitrateKbps = 3500,
                 signalingEndpoint = "ws://192.168.1.20:8080/ws",

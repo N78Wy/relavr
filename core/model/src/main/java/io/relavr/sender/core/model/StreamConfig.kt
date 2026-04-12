@@ -18,32 +18,56 @@ data class StreamConfig(
 
     fun validationError(): SenderError.InvalidConfig? {
         if (!videoEnabled) {
-            return SenderError.InvalidConfig("当前版本必须启用视频推流")
+            return SenderError.InvalidConfig(
+                message = "Video streaming must remain enabled in this version.",
+                uiText = UiText.of(R.string.sender_error_video_required),
+            )
         }
         if (trimmedSignalingEndpoint.isEmpty()) {
-            return SenderError.InvalidConfig("WebSocket 地址不能为空")
+            return SenderError.InvalidConfig(
+                message = "The WebSocket endpoint is required.",
+                uiText = UiText.of(R.string.sender_error_signaling_endpoint_required),
+            )
         }
         if (trimmedSessionId.isEmpty()) {
-            return SenderError.InvalidConfig("Session ID 不能为空")
+            return SenderError.InvalidConfig(
+                message = "The session ID is required.",
+                uiText = UiText.of(R.string.sender_error_session_id_required),
+            )
         }
         if (resolution !in RESOLUTION_OPTIONS) {
-            return SenderError.InvalidConfig("分辨率不在支持列表内")
+            return SenderError.InvalidConfig(
+                message = "The selected resolution is not supported.",
+                uiText = UiText.of(R.string.sender_error_resolution_unsupported),
+            )
         }
         if (fps !in FPS_OPTIONS) {
-            return SenderError.InvalidConfig("帧率不在支持列表内")
+            return SenderError.InvalidConfig(
+                message = "The selected frame rate is not supported.",
+                uiText = UiText.of(R.string.sender_error_fps_unsupported),
+            )
         }
         if (bitrateKbps !in BITRATE_OPTIONS_KBPS) {
-            return SenderError.InvalidConfig("码率不在支持列表内")
+            return SenderError.InvalidConfig(
+                message = "The selected bitrate is not supported.",
+                uiText = UiText.of(R.string.sender_error_bitrate_unsupported),
+            )
         }
 
         val uri =
             runCatching {
                 URI(trimmedSignalingEndpoint)
             }.getOrNull()
-                ?: return SenderError.InvalidConfig("WebSocket 地址格式无效")
+                ?: return SenderError.InvalidConfig(
+                    message = "The WebSocket endpoint format is invalid.",
+                    uiText = UiText.of(R.string.sender_error_signaling_endpoint_invalid),
+                )
 
         if (uri.scheme !in SUPPORTED_SIGNALING_SCHEMES || uri.host.isNullOrBlank()) {
-            return SenderError.InvalidConfig("WebSocket 地址必须使用 ws:// 或 wss://")
+            return SenderError.InvalidConfig(
+                message = "The WebSocket endpoint must use ws:// or wss://.",
+                uiText = UiText.of(R.string.sender_error_signaling_endpoint_scheme_invalid),
+            )
         }
         return null
     }

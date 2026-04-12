@@ -18,19 +18,19 @@ object ReceiverConnectPayloadCodec {
         val fields = SimpleJsonObjectCodec.decode(payload)
         val type = fields.requireJsonString(TYPE_KEY)
         if (type != TYPE_VALUE) {
-            throw IllegalArgumentException("未知的连接载荷类型: $type")
+            throw IllegalArgumentException("Unknown receiver-connect payload type: $type")
         }
 
         val protocolVersion = fields.requireJsonInt(VERSION_KEY)
         if (protocolVersion != ReceiverConnectionInfo.CURRENT_PROTOCOL_VERSION) {
-            throw IllegalArgumentException("不支持的连接协议版本: $protocolVersion")
+            throw IllegalArgumentException("Unsupported receiver-connect protocol version: $protocolVersion")
         }
 
         val authRequired =
             when (val auth = fields.requireJsonString(AUTH_KEY)) {
                 AUTH_PIN -> true
                 AUTH_NONE -> false
-                else -> throw IllegalArgumentException("未知的鉴权模式: $auth")
+                else -> throw IllegalArgumentException("Unknown authentication mode: $auth")
             }
 
         return ReceiverConnectionInfo(

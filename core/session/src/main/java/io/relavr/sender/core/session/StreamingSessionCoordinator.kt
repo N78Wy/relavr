@@ -6,9 +6,11 @@ import io.relavr.sender.core.model.AudioStreamState
 import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.PublishState
+import io.relavr.sender.core.model.R
 import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
+import io.relavr.sender.core.model.UiText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -60,7 +62,7 @@ class StreamingSessionCoordinator(
                 handleFailure(
                     error = configError,
                     throwable = null,
-                    operation = "推流配置校验失败",
+                    operation = "Streaming configuration validation failed",
                 )
                 return
             }
@@ -76,7 +78,7 @@ class StreamingSessionCoordinator(
                             AudioStreamState.Disabled
                         },
                     audioDetail = null,
-                    statusDetail = "正在等待 MediaProjection 系统授权",
+                    statusDetail = UiText.of(R.string.sender_status_waiting_projection_permission),
                     error = null,
                 )
             }
@@ -89,7 +91,7 @@ class StreamingSessionCoordinator(
                     handleFailure(
                         error = mapError(throwable),
                         throwable = throwable,
-                        operation = "请求投屏权限失败",
+                        operation = "Requesting the screen-capture permission failed",
                     )
                     return
                 }
@@ -104,7 +106,7 @@ class StreamingSessionCoordinator(
                     it.copy(
                         captureState = CaptureState.Starting,
                         publishState = PublishState.Preparing,
-                        statusDetail = "正在探测设备编码能力",
+                        statusDetail = UiText.of(R.string.sender_status_probing_codec_capabilities),
                     )
                 }
 
@@ -120,7 +122,7 @@ class StreamingSessionCoordinator(
                     } else {
                         AudioStreamState.Disabled
                     }
-                var audioDetail: String? = null
+                var audioDetail: UiText? = null
 
                 val audioSource =
                     if (resolvedConfig.audioEnabled) {
@@ -134,10 +136,10 @@ class StreamingSessionCoordinator(
                                 throw throwable
                             }
                             audioState = AudioStreamState.Degraded
-                            audioDetail = mappedError.message
+                            audioDetail = mappedError.uiText
                             logger.error(
                                 TAG,
-                                "音频采集初始化失败，已降级为仅视频推流: ${mappedError.message}",
+                                "Audio capture initialization failed. Falling back to video-only streaming: ${mappedError.message}",
                                 throwable,
                             )
                         }.getOrNull()
@@ -154,7 +156,7 @@ class StreamingSessionCoordinator(
                 }
 
                 state.update {
-                    it.copy(statusDetail = "正在连接信令服务器")
+                    it.copy(statusDetail = UiText.of(R.string.sender_status_connecting_signaling))
                 }
                 val signalingSession =
                     withContext(dispatchers.io) {
@@ -171,7 +173,7 @@ class StreamingSessionCoordinator(
                 monitorJob = observeRtcEvents(sessionToken, publishSession)
 
                 state.update {
-                    it.copy(statusDetail = "正在准备 WebRTC 视频轨道")
+                    it.copy(statusDetail = UiText.of(R.string.sender_status_preparing_video_track))
                 }
                 val publishResult =
                     withContext(dispatchers.io) {
@@ -206,9 +208,9 @@ class StreamingSessionCoordinator(
                         codecSelection = selection,
                         statusDetail =
                             if (finalAudioState == AudioStreamState.Publishing) {
-                                "WebRTC 已连接，正在发送音视频"
+                                UiText.of(R.string.sender_status_streaming_audio_video)
                             } else {
-                                "WebRTC 已连接，正在发送视频"
+                                UiText.of(R.string.sender_status_streaming_video_only)
                             },
                         error = null,
                     )
@@ -220,7 +222,7 @@ class StreamingSessionCoordinator(
                 handleFailure(
                     error = mapError(throwable),
                     throwable = throwable,
-                    operation = "启动推流会话失败",
+                    operation = "Starting the streaming session failed",
                 )
             }
         }
@@ -250,7 +252,7 @@ class StreamingSessionCoordinator(
                 it.copy(
                     captureState = CaptureState.Stopping,
                     publishState = PublishState.Stopping,
-                    statusDetail = "正在释放推流资源",
+                    statusDetail = UiText.of(R.string.sender_status_releasing_resources),
                     error = null,
                 )
             }
@@ -280,9 +282,9 @@ class StreamingSessionCoordinator(
                 }
             } catch (throwable: Throwable) {
                 handleFailure(
-                    error = SenderError.SessionStopFailed(throwable.message ?: "停止推流失败"),
+                    error = SenderError.SessionStopFailed(throwable.message ?: "Stopping the streaming session failed."),
                     throwable = throwable,
-                    operation = "停止推流会话失败",
+                    operation = "Stopping the streaming session failed",
                 )
             }
         }
@@ -328,7 +330,7 @@ class StreamingSessionCoordinator(
                                             current.captureState == CaptureState.Capturing &&
                                             current.publishState == PublishState.Publishing
                                         ) {
-                                            "WebRTC 已连接，正在发送视频"
+                                            UiText.of(R.string.sender_status_streaming_video_only)
                                         } else {
                                             current.statusDetail
                                         },
@@ -340,7 +342,7 @@ class StreamingSessionCoordinator(
                     RtcSessionEvent.Disconnected ->
                         terminateFromRtcEvent(
                             sessionToken = sessionToken,
-                            error = SenderError.PeerConnectionFailed("WebRTC 连接已断开"),
+                            error = SenderError.PeerConnectionFailed("The WebRTC connection was disconnected."),
                         )
                 }
             }
@@ -368,7 +370,7 @@ class StreamingSessionCoordinator(
 
             logger.error(
                 TAG,
-                "推流会话异常结束: ${error.message}",
+                "The streaming session ended unexpectedly: ${error.message}",
                 null,
             )
             state.update {
@@ -377,7 +379,7 @@ class StreamingSessionCoordinator(
                     publishState = PublishState.Error,
                     resolvedConfig = null,
                     codecSelection = null,
-                    statusDetail = error.message,
+                    statusDetail = error.uiText,
                     error = error,
                 )
             }
@@ -402,7 +404,7 @@ class StreamingSessionCoordinator(
                 publishState = PublishState.Error,
                 resolvedConfig = null,
                 codecSelection = null,
-                statusDetail = error.message,
+                statusDetail = error.uiText,
                 error = error,
             )
         }
@@ -412,8 +414,8 @@ class StreamingSessionCoordinator(
         when (throwable) {
             is PermissionDeniedException -> SenderError.PermissionDenied
             is SenderException -> throwable.error
-            is TimeoutCancellationException -> SenderError.SignalingFailed("等待远端应答超时")
-            else -> SenderError.Unexpected(throwable.message ?: "发送会话出现未知错误")
+            is TimeoutCancellationException -> SenderError.SignalingFailed("Timed out while waiting for the remote answer.")
+            else -> SenderError.Unexpected(throwable.message ?: "An unexpected sender error occurred.")
         }
 
     private data class ActiveSession(
@@ -430,7 +432,7 @@ class StreamingSessionCoordinator(
     }
 }
 
-class PermissionDeniedException : IllegalStateException("用户拒绝了屏幕采集授权")
+class PermissionDeniedException : IllegalStateException("The user denied the screen capture permission request.")
 
 class SenderException(
     val error: SenderError,

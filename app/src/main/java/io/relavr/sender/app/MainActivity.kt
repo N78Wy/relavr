@@ -2,11 +2,11 @@ package io.relavr.sender.app
 
 import android.content.pm.PackageManager
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
@@ -19,12 +19,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import io.relavr.sender.app.ui.theme.relavrTheme
+import io.relavr.sender.core.model.UiText
 import io.relavr.sender.feature.streamcontrol.StreamControlViewModel
 import io.relavr.sender.feature.streamcontrol.streamControlScreen
 import kotlinx.coroutines.launch
 
 @ExperimentalCamera2Interop
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     private val appContainer: AppContainer
         get() = (application as RelavrApplication).appContainer
 
@@ -49,7 +50,9 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             headsetCameraGranted = granted
             if (!granted) {
-                viewModel.onScannerFailed("未授予头显相机权限，已取消扫码")
+                viewModel.onScannerFailed(
+                    UiText.of(io.relavr.sender.feature.streamcontrol.R.string.stream_control_scan_camera_permission_denied),
+                )
             }
         }
 
@@ -84,6 +87,16 @@ class MainActivity : ComponentActivity() {
                     }
                     streamControlScreen(
                         uiState = uiState,
+                        selectedLanguageTag = currentAppLanguage().tag,
+                        onLanguageTagSelected = { tag ->
+                            applyAppLanguage(
+                                if (tag == AppLanguage.SimplifiedChinese.tag) {
+                                    AppLanguage.SimplifiedChinese
+                                } else {
+                                    AppLanguage.English
+                                },
+                            )
+                        },
                         onSignalingEndpointChanged = viewModel::onSignalingEndpointChanged,
                         onSessionIdChanged = viewModel::onSessionIdChanged,
                         onCodecPreferenceChanged = viewModel::onCodecPreferenceChanged,

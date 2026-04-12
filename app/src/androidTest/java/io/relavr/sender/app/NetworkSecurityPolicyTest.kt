@@ -11,7 +11,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class NetworkSecurityPolicyTest {
     @Test
-    fun `应用已声明WebRTC所需的网络权限`() {
+    fun `the app declares the network permissions required by webrtc`() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val packageInfo =
             @Suppress("DEPRECATION")
@@ -24,7 +24,7 @@ class NetworkSecurityPolicyTest {
     }
 
     @Test
-    fun `应用允许模拟器和局域网信令地址使用明文流量`() {
+    fun `the app allows cleartext traffic for emulator and lan signaling hosts`() {
         val policy = NetworkSecurityPolicy.getInstance()
 
         assertTrue(policy.isCleartextTrafficPermitted("10.0.2.2"))

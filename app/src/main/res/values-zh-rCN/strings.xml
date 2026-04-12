@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">Relavr Sender</string>
+    <string name="streaming_notification_channel_name">Relavr 推流</string>
+    <string name="streaming_notification_channel_description">Quest 3 画面采集与推流前台服务</string>
+    <string name="streaming_notification_title">Relavr 推流会话</string>
+    <string name="streaming_notification_waiting_permission">正在等待 MediaProjection 系统授权</string>
+    <string name="streaming_notification_starting">正在准备采集与推流链路</string>
+    <string name="streaming_notification_streaming">正在采集 Quest 3 画面并保持推流</string>
+    <string name="streaming_notification_stopping">正在停止推流会话</string>
+    <string name="streaming_notification_preparing">前台推流服务正在运行</string>
+    <string name="sender_scanner_title">扫码连接接收端</string>
+    <string name="sender_scanner_description">扫描 receiver 控制台二维码后会自动填入地址并立即发起开播。</string>
+    <string name="sender_scanner_requesting_camera_permission">正在请求头显相机权限</string>
+    <string name="sender_scanner_manual_fallback">如果扫码失败，可以关闭弹层后继续手动填写 WebSocket 地址和 Session ID。</string>
+    <string name="sender_scanner_cancel">取消扫码</string>
+    <string name="sender_scanner_camera_start_failed">头显相机启动失败</string>
+    <string name="sender_scanner_decode_failed">二维码识别失败</string>
+</resources>

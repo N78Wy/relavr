@@ -5,8 +5,10 @@ import android.content.Intent
 import android.media.projection.MediaProjection
 import io.relavr.sender.core.common.AppLogger
 import io.relavr.sender.core.model.AudioStreamState
+import io.relavr.sender.core.model.R
 import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
+import io.relavr.sender.core.model.UiText
 import io.relavr.sender.core.session.AudioCaptureSource
 import io.relavr.sender.core.session.ProjectionAccess
 import io.relavr.sender.core.session.PublishStartResult
@@ -102,19 +104,19 @@ private class WebRtcPublishSession(
     ): PublishStartResult {
         val permission =
             projectionAccess.mediaProjectionPermission()
-                ?: throw SenderException(SenderError.SessionStartFailed("缺少有效的 MediaProjection 授权结果"))
+                ?: throw SenderException(SenderError.SessionStartFailed("Missing a valid MediaProjection permission result."))
 
         val sessionId = config.trimmedSessionId
         val peer =
             createPeerConnection(sessionId)
-                ?: throw SenderException(SenderError.PeerConnectionFailed("无法创建 PeerConnection"))
+                ?: throw SenderException(SenderError.PeerConnectionFailed("Unable to create the PeerConnection."))
         peerConnection = peer
 
         signalingJob = observeIncomingSignaling(peer)
 
-        eventFlow.tryEmit(RtcSessionEvent.Status("已连接信令服务器"))
+        eventFlow.tryEmit(RtcSessionEvent.Status(UiText.of(R.string.sender_status_connected_signaling)))
         signalingSession.send(SignalingMessage.Join(sessionId = sessionId))
-        eventFlow.tryEmit(RtcSessionEvent.Status("已发送会话加入请求"))
+        eventFlow.tryEmit(RtcSessionEvent.Status(UiText.of(R.string.sender_status_sent_join_request)))
 
         val capturer =
             ScreenCapturerAndroid(
@@ -125,7 +127,7 @@ private class WebRtcPublishSession(
                             return
                         }
                         signalFailure(
-                            SenderError.CaptureInterrupted("屏幕采集已被系统停止"),
+                            SenderError.CaptureInterrupted("Screen capture was stopped by the system."),
                             interruptCapture = true,
                         )
                     }
@@ -165,7 +167,7 @@ private class WebRtcPublishSession(
         val audioPublishResult = attachAudioTrack(peer, sessionId, capturer, audioSource)
         peer.setBitrate(null, config.bitrateKbps * 1000, config.bitrateKbps * 1000)
 
-        eventFlow.tryEmit(RtcSessionEvent.Status("正在创建 WebRTC Offer"))
+        eventFlow.tryEmit(RtcSessionEvent.Status(UiText.of(R.string.sender_status_creating_offer)))
         val rawOffer = peer.awaitCreateOffer()
         val preferredOffer =
             SessionDescription(
@@ -182,21 +184,21 @@ private class WebRtcPublishSession(
                 sdp = preferredOffer.description,
             ),
         )
-        eventFlow.tryEmit(RtcSessionEvent.Status("已发送 Offer，等待 Answer"))
+        eventFlow.tryEmit(RtcSessionEvent.Status(UiText.of(R.string.sender_status_sent_offer_waiting_answer)))
 
         awaitSuccessOrFailure(
             success = remoteDescriptionReady,
             failure = terminalError,
             timeoutMs = ANSWER_TIMEOUT_MS,
-            timeoutError = SenderError.SignalingFailed("等待远端 Answer 超时"),
+            timeoutError = SenderError.SignalingFailed("Timed out while waiting for the remote answer."),
         )
 
-        eventFlow.tryEmit(RtcSessionEvent.Status("ICE 连接建立中"))
+        eventFlow.tryEmit(RtcSessionEvent.Status(UiText.of(R.string.sender_status_checking_ice)))
         awaitSuccessOrFailure(
             success = peerConnected,
             failure = terminalError,
             timeoutMs = CONNECT_TIMEOUT_MS,
-            timeoutError = SenderError.PeerConnectionFailed("等待 WebRTC 连接建立超时"),
+            timeoutError = SenderError.PeerConnectionFailed("Timed out while waiting for the WebRTC connection."),
         )
         return audioPublishResult
     }
@@ -215,7 +217,7 @@ private class WebRtcPublishSession(
         return runCatching {
             val mediaProjection =
                 capturer.mediaProjection
-                    ?: throw SenderException(SenderError.SessionStartFailed("屏幕采集尚未就绪，无法启动音频采集"))
+                    ?: throw SenderException(SenderError.SessionStartFailed("Screen capture is not ready, so audio capture cannot start."))
             audioSource.start(mediaProjection)
             audioBridge.attachSource(audioSource)
 
@@ -237,12 +239,12 @@ private class WebRtcPublishSession(
             }
             logger.error(
                 TAG,
-                "初始化 WebRTC 音轨失败，已降级为仅视频推流: ${throwable.message}",
+                "Failed to initialize the WebRTC audio track. Falling back to video-only streaming: ${throwable.message}",
                 throwable,
             )
             PublishStartResult(
                 audioState = AudioStreamState.Degraded,
-                audioDetail = throwable.message ?: "音频已降级为静音/仅视频",
+                audioDetail = UiText.of(R.string.sender_audio_degraded_video_only),
             )
         }
     }
@@ -261,7 +263,7 @@ private class WebRtcPublishSession(
 
                 override fun onIceConnectionChange(newState: PeerConnection.IceConnectionState) {
                     if (newState == PeerConnection.IceConnectionState.FAILED) {
-                        signalFailure(SenderError.PeerConnectionFailed("ICE 连接失败"))
+                        signalFailure(SenderError.PeerConnectionFailed("The ICE connection failed."))
                     }
                 }
 
@@ -286,7 +288,7 @@ private class WebRtcPublishSession(
                         }.onFailure { throwable ->
                             signalFailure(
                                 SenderError.SignalingFailed(
-                                    throwable.message ?: "发送本地 ICE Candidate 失败",
+                                    throwable.message ?: "Sending the local ICE candidate failed.",
                                 ),
                             )
                         }
@@ -309,7 +311,7 @@ private class WebRtcPublishSession(
                     }
                     when (newState) {
                         PeerConnection.PeerConnectionState.CONNECTED -> {
-                            eventFlow.tryEmit(RtcSessionEvent.Status("WebRTC 已连接"))
+                            eventFlow.tryEmit(RtcSessionEvent.Status(UiText.of(R.string.sender_status_connected_webrtc)))
                             peerConnected.complete(Unit)
                         }
 
@@ -319,12 +321,14 @@ private class WebRtcPublishSession(
                             if (peerConnected.isCompleted) {
                                 eventFlow.tryEmit(RtcSessionEvent.Disconnected)
                             } else {
-                                signalFailure(SenderError.PeerConnectionFailed("WebRTC 连接在建连阶段断开"))
+                                signalFailure(
+                                    SenderError.PeerConnectionFailed("The WebRTC connection disconnected before it was fully established."),
+                                )
                             }
                         }
 
                         PeerConnection.PeerConnectionState.FAILED ->
-                            signalFailure(SenderError.PeerConnectionFailed("WebRTC 连接失败"))
+                            signalFailure(SenderError.PeerConnectionFailed("The WebRTC connection failed."))
 
                         else -> Unit
                     }
@@ -338,7 +342,7 @@ private class WebRtcPublishSession(
             signalingSession.messages.collect { message ->
                 when (message) {
                     is SignalingMessage.Answer -> {
-                        eventFlow.tryEmit(RtcSessionEvent.Status("正在应用远端 Answer"))
+                        eventFlow.tryEmit(RtcSessionEvent.Status(UiText.of(R.string.sender_status_applying_remote_answer)))
                         peer.awaitSetRemoteDescription(
                             SessionDescription(
                                 SessionDescription.Type.ANSWER,
@@ -364,13 +368,13 @@ private class WebRtcPublishSession(
                     }
 
                     is SignalingMessage.Error ->
-                        signalFailure(SenderError.SignalingFailed(message.message))
+                        signalFailure(SenderError.SignalingFailed(message.message ?: "The signaling server returned an error."))
 
                     is SignalingMessage.Leave -> {
                         if (peerConnected.isCompleted) {
                             eventFlow.tryEmit(RtcSessionEvent.Disconnected)
                         } else {
-                            signalFailure(SenderError.SignalingFailed("远端已结束会话"))
+                            signalFailure(SenderError.SignalingFailed("The remote side ended the session."))
                         }
                     }
 
@@ -394,7 +398,7 @@ private class WebRtcPublishSession(
     ) {
         val added = peer.addIceCandidate(candidate)
         if (!added) {
-            signalFailure(SenderError.PeerConnectionFailed("应用远端 ICE Candidate 失败"))
+            signalFailure(SenderError.PeerConnectionFailed("Applying the remote ICE candidate failed."))
         }
     }
 
@@ -585,7 +589,7 @@ private suspend fun PeerConnection.awaitCreateDescription(createBlock: (org.webr
                         continuation.resumeWith(
                             Result.failure(
                                 SenderException(
-                                    SenderError.PeerConnectionFailed(error.ifBlank { "创建 SDP 失败" }),
+                                    SenderError.PeerConnectionFailed(error.ifBlank { "Creating the SDP failed." }),
                                 ),
                             ),
                         )
@@ -616,7 +620,7 @@ private suspend fun PeerConnection.awaitSetDescription(setBlock: (org.webrtc.Sdp
                         continuation.resumeWith(
                             Result.failure(
                                 SenderException(
-                                    SenderError.PeerConnectionFailed(error.ifBlank { "设置 SDP 失败" }),
+                                    SenderError.PeerConnectionFailed(error.ifBlank { "Applying the SDP failed." }),
                                 ),
                             ),
                         )

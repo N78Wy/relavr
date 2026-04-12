@@ -5,7 +5,7 @@ import org.junit.Test
 
 class SdpCodecPreferenceTest {
     @Test
-    fun `preferVideoCodec 会把 H264 payload 提前到 video m line 前部`() {
+    fun `preferVideoCodec moves h264 payloads to the front of the video m line`() {
         assertCodecReordered(
             codecName = "H264",
             mediaLinePayloads = "96 97 100 101 98 99 102 103",
@@ -14,7 +14,7 @@ class SdpCodecPreferenceTest {
     }
 
     @Test
-    fun `preferVideoCodec 会把 H265 payload 提前到 video m line 前部`() {
+    fun `preferVideoCodec moves h265 payloads to the front of the video m line`() {
         assertCodecReordered(
             codecName = "H265",
             mediaLinePayloads = "96 97 98 99 102 103 100 101",
@@ -23,7 +23,7 @@ class SdpCodecPreferenceTest {
     }
 
     @Test
-    fun `preferVideoCodec 会把 VP8 payload 提前到 video m line 前部`() {
+    fun `preferVideoCodec moves vp8 payloads to the front of the video m line`() {
         assertCodecReordered(
             codecName = "VP8",
             mediaLinePayloads = "98 99 100 101 102 103 96 97",
@@ -32,7 +32,7 @@ class SdpCodecPreferenceTest {
     }
 
     @Test
-    fun `preferVideoCodec 会把 VP9 payload 提前到 video m line 前部`() {
+    fun `preferVideoCodec moves vp9 payloads to the front of the video m line`() {
         assertCodecReordered(
             codecName = "VP9",
             mediaLinePayloads = "96 97 98 99 100 101 102 103",

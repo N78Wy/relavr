@@ -8,6 +8,7 @@ import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
+import io.relavr.sender.core.model.UiText
 import io.relavr.sender.core.session.StreamingSessionController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -42,7 +43,7 @@ internal class ForegroundServiceStreamingSessionController(
             current.copy(
                 captureState = CaptureState.RequestingPermission,
                 publishState = PublishState.Preparing,
-                statusDetail = "正在启动前台推流服务",
+                statusDetail = UiText.of(io.relavr.sender.core.model.R.string.sender_status_starting_foreground_service),
                 error = null,
             )
         }
@@ -51,9 +52,9 @@ internal class ForegroundServiceStreamingSessionController(
                 recordAudioPermissionGateway.requestPermissionIfNeeded()
             }.onFailure { throwable ->
                 reportFailure(
-                    error = SenderError.SessionStartFailed(throwable.message ?: "无法请求录音权限"),
+                    error = SenderError.SessionStartFailed(throwable.message ?: "Unable to request the audio-record permission."),
                     throwable = throwable,
-                    operation = "请求录音权限失败",
+                    operation = "Requesting the audio-record permission failed",
                 )
                 return
             }
@@ -62,9 +63,9 @@ internal class ForegroundServiceStreamingSessionController(
             commandDispatcher.startSession(config)
         }.onFailure { throwable ->
             reportFailure(
-                error = SenderError.SessionStartFailed(throwable.message ?: "无法启动前台推流服务"),
+                error = SenderError.SessionStartFailed(throwable.message ?: "Unable to start the foreground streaming service."),
                 throwable = throwable,
-                operation = "启动前台推流服务失败",
+                operation = "Starting the foreground streaming service failed",
             )
         }
     }
@@ -74,7 +75,7 @@ internal class ForegroundServiceStreamingSessionController(
             current.copy(
                 captureState = CaptureState.Stopping,
                 publishState = PublishState.Stopping,
-                statusDetail = "正在发送停止命令",
+                statusDetail = UiText.of(io.relavr.sender.core.model.R.string.sender_status_sending_stop_command),
                 error = null,
             )
         }
@@ -82,9 +83,9 @@ internal class ForegroundServiceStreamingSessionController(
             commandDispatcher.stopSession()
         }.onFailure { throwable ->
             reportFailure(
-                error = SenderError.SessionStopFailed(throwable.message ?: "无法发送停止前台服务命令"),
+                error = SenderError.SessionStopFailed(throwable.message ?: "Unable to send the foreground service stop command."),
                 throwable = throwable,
-                operation = "发送停止前台服务命令失败",
+                operation = "Sending the foreground service stop command failed",
             )
         }
     }
@@ -107,7 +108,7 @@ internal class ForegroundServiceStreamingSessionController(
                 publishState = PublishState.Error,
                 resolvedConfig = null,
                 codecSelection = null,
-                statusDetail = error.message,
+                statusDetail = error.uiText,
                 error = error,
             )
         }

@@ -8,6 +8,7 @@ import io.relavr.sender.core.model.CodecSelection
 import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
+import io.relavr.sender.core.model.UiText
 import io.relavr.sender.core.session.AudioCaptureSource
 import io.relavr.sender.core.session.AudioCaptureSourceFactory
 import io.relavr.sender.core.session.AudioFrameReadResult
@@ -135,7 +136,7 @@ class FakeCodecPolicy : CodecPolicy {
                 preference
             } else {
                 capabilities.supportedCodecs.firstOrNull() ?: throw SenderException(
-                    SenderError.CapabilityUnavailable("无可用编码格式"),
+                    SenderError.CapabilityUnavailable("No video codec is available."),
                 )
             }
         return CodecSelection(
@@ -284,7 +285,7 @@ class FakeStreamingSessionController(
             state.value.copy(
                 audioState = AudioStreamState.Disabled,
                 resolvedConfig = config,
-                statusDetail = "fake-started",
+                statusDetail = UiText.of(io.relavr.sender.core.model.R.string.sender_status_default_idle),
             )
     }
 

@@ -1,5 +1,7 @@
 package io.relavr.sender.platform.webrtc
 
+import io.relavr.sender.core.model.R
+import io.relavr.sender.core.model.UiText
 import io.relavr.sender.core.session.AudioCaptureSource
 import org.webrtc.audio.JavaAudioDeviceModule
 import java.nio.ByteBuffer
@@ -7,7 +9,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 internal class PlaybackAudioBufferBridge(
-    private val onAudioDegraded: (String) -> Unit,
+    private val onAudioDegraded: (UiText) -> Unit,
 ) : JavaAudioDeviceModule.AudioBufferCallback {
     private val sourceRef = AtomicReference<AudioCaptureSource?>(null)
     private val degradationReported = AtomicBoolean(false)
@@ -34,12 +36,12 @@ internal class PlaybackAudioBufferBridge(
             buffer.rewind()
             val result = source.read(buffer, bytesRead)
             if (result.bytesRead < 0 || result.bytesRead > bytesRead) {
-                throw IllegalStateException("音频采样结果长度无效：${result.bytesRead}")
+                throw IllegalStateException("Invalid audio sample length: ${result.bytesRead}")
             }
             result.timestampNs
         }.getOrElse { throwable ->
             if (degradationReported.compareAndSet(false, true)) {
-                onAudioDegraded(throwable.message ?: "音频已降级为静音/仅视频")
+                onAudioDegraded(UiText.of(R.string.sender_audio_degraded_video_only))
             }
             writeSilence(buffer, bytesRead, captureTimeNs)
         }

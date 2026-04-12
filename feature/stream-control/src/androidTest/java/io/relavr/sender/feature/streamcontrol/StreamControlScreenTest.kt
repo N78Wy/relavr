@@ -26,6 +26,7 @@ import io.relavr.sender.core.model.CodecSelection
 import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
+import io.relavr.sender.core.model.UiText
 import io.relavr.sender.core.model.VideoResolution
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -38,7 +39,7 @@ class StreamControlScreenTest {
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
-    fun `开始和停止按钮会触发对应动作`() {
+    fun `start and stop buttons trigger the matching callbacks`() {
         var startCount = 0
         var stopCount = 0
         var uiState by mutableStateOf(
@@ -73,7 +74,7 @@ class StreamControlScreenTest {
     }
 
     @Test
-    fun `错误信息会显示在界面上`() {
+    fun `error messages are shown on screen`() {
         setStreamControlContent(
             uiState =
                 buildStreamControlUiState(
@@ -87,11 +88,11 @@ class StreamControlScreenTest {
                 ),
         )
 
-        composeRule.onNodeWithText("mock-error").assertIsDisplayed()
+        composeRule.onNodeWithText("An unexpected sender error occurred.").assertIsDisplayed()
     }
 
     @Test
-    fun `会显示Quest3实机局域网地址提示`() {
+    fun `the quest3 lan endpoint hint is displayed`() {
         setStreamControlContent(
             uiState =
                 buildStreamControlUiState(
@@ -101,15 +102,19 @@ class StreamControlScreenTest {
         )
 
         composeRule
-            .onNodeWithText("Quest 3 实机请填写开发机局域网地址，例如 ws://192.168.1.20:8080/ws；10.0.2.2 仅适用于 Android 模拟器。")
-            .assertIsDisplayed()
-        composeRule.onNodeWithText("例如 ws://192.168.1.20:8080/ws").assertIsDisplayed()
+            .onNodeWithText(
+                "On a Quest 3 device, use the development machine LAN address such as ws://192.168.1.20:8080/ws. Use 10.0.2.2 only on the Android emulator.",
+            ).assertIsDisplayed()
+        composeRule.onNodeWithText("Example: ws://192.168.1.20:8080/ws").assertIsDisplayed()
         composeRule.onNodeWithTag(StreamControlTestTags.SCAN_BUTTON).assertIsDisplayed()
-        composeRule.onNodeWithText("扫描 receiver 控制台二维码后会自动回填地址并立即开播").assertIsDisplayed()
+        composeRule
+            .onNodeWithText(
+                "Scan the receiver console QR code to autofill the endpoint and start streaming immediately.",
+            ).assertIsDisplayed()
     }
 
     @Test
-    fun `扫码按钮会触发回调`() {
+    fun `the scan button triggers its callback`() {
         var openScannerCount = 0
 
         setStreamControlContent(
@@ -126,7 +131,7 @@ class StreamControlScreenTest {
     }
 
     @Test
-    fun `扫码状态文案会显示最近扫描结果`() {
+    fun `the scan status shows the most recent receiver result`() {
         setStreamControlContent(
             uiState =
                 buildStreamControlUiState(
@@ -147,12 +152,12 @@ class StreamControlScreenTest {
         )
 
         composeRule
-            .onNodeWithText("最近扫码：Living Room（192.168.1.20:17888），接收端仍需本地确认")
+            .onNodeWithText("Last scan: Living Room (192.168.1.20:17888). The receiver still requires local confirmation.")
             .assertIsDisplayed()
     }
 
     @Test
-    fun `非法配置时开始按钮禁用且输入会透传回调`() {
+    fun `invalid config disables start while inputs still forward callbacks`() {
         var lastEndpoint = ""
         var lastSessionId = ""
         var uiState by mutableStateOf(
@@ -183,7 +188,7 @@ class StreamControlScreenTest {
     }
 
     @Test
-    fun `音频开关可操作且会展示降级提示`() {
+    fun `the audio toggle works and shows degradation hints`() {
         var audioEnabled = true
 
         setStreamControlContent(
@@ -193,19 +198,19 @@ class StreamControlScreenTest {
                     sessionSnapshot =
                         StreamingSessionSnapshot(
                             audioState = AudioStreamState.Degraded,
-                            audioDetail = "音频已降级为静音/仅视频",
+                            audioDetail = UiText.of(io.relavr.sender.core.model.R.string.sender_audio_degraded_video_only),
                         ),
                 ),
             onAudioEnabledChanged = { audioEnabled = it },
         )
 
-        composeRule.onNodeWithText("音频已降级为静音/仅视频").assertIsDisplayed()
+        composeRule.onNodeWithText("Audio capture degraded. Continuing with video only.").assertIsDisplayed()
         composeRule.onNodeWithTag(StreamControlTestTags.AUDIO_SWITCH).performClick()
         assertEquals(false, audioEnabled)
     }
 
     @Test
-    fun `编码选项可切换且不支持项禁用`() {
+    fun `codec options are switchable and unsupported ones stay disabled`() {
         var selectedCodec = CodecPreference.H264
 
         setStreamControlContent(
@@ -235,7 +240,7 @@ class StreamControlScreenTest {
     }
 
     @Test
-    fun `编码回退时会显示请求与实际编码`() {
+    fun `codec fallback shows the requested and resolved codec`() {
         setStreamControlContent(
             uiState =
                 buildStreamControlUiState(
@@ -256,11 +261,11 @@ class StreamControlScreenTest {
                 ),
         )
 
-        composeRule.onNodeWithText("本次请求 H.265 / HEVC，实际使用 H.264 / AVC").assertIsDisplayed()
+        composeRule.onNodeWithText("Requested H.265 / HEVC. Using H.264 / AVC instead.").assertIsDisplayed()
     }
 
     @Test
-    fun `规格选项可切换且回调会收到用户选择`() {
+    fun `profile options are switchable and callbacks receive user selections`() {
         var selectedResolution = StreamConfig.DEFAULT_RESOLUTION
         var selectedFps = StreamConfig.DEFAULT_FPS
         var selectedBitrate = StreamConfig.DEFAULT_BITRATE_KBPS
@@ -286,7 +291,7 @@ class StreamControlScreenTest {
     }
 
     @Test
-    fun `窄宽度下规格卡和操作按钮仍然可见`() {
+    fun `the profile card and action buttons remain visible at narrow widths`() {
         setStreamControlContent(
             uiState =
                 buildStreamControlUiState(
@@ -323,6 +328,8 @@ class StreamControlScreenTest {
             Box(modifier = Modifier.fillMaxSize().then(containerModifier)) {
                 streamControlScreen(
                     uiState = uiState,
+                    selectedLanguageTag = "en",
+                    onLanguageTagSelected = {},
                     onSignalingEndpointChanged = onSignalingEndpointChanged,
                     onSessionIdChanged = onSessionIdChanged,
                     onCodecPreferenceChanged = onCodecPreferenceChanged,

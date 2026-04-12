@@ -16,6 +16,7 @@ import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
 import io.relavr.sender.core.model.VideoResolution
+import io.relavr.sender.core.model.resolve
 import io.relavr.sender.core.session.StreamingSessionController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -61,12 +62,12 @@ class MediaProjectionForegroundService : Service() {
             ACTION_START -> {
                 val config = intent.toStreamConfig()
                 if (config == null) {
-                    AndroidAppLogger.error(TAG, "前台推流服务缺少必要的 StreamConfig")
+                    AndroidAppLogger.error(TAG, "The foreground streaming service is missing a required StreamConfig.")
                     stopSelfResult(startId)
                     return START_NOT_STICKY
                 }
 
-                // Android 14+ 要求先进入 mediaProjection 前台服务，再创建 MediaProjection 会话。
+                // Android 14+ requires entering the mediaProjection foreground service before creating the session.
                 enterForeground(sessionEngine.observeState().value)
                 serviceScope.launch {
                     handleStart(startId = startId, config = config)
@@ -80,7 +81,7 @@ class MediaProjectionForegroundService : Service() {
             }
 
             else -> {
-                AndroidAppLogger.error(TAG, "收到未知的前台推流服务命令: ${intent?.action}")
+                AndroidAppLogger.error(TAG, "Received an unknown foreground service command: ${intent?.action}")
                 stopSelfResult(startId)
             }
         }
@@ -103,7 +104,11 @@ class MediaProjectionForegroundService : Service() {
         runCatching {
             sessionEngine.start(config)
         }.onFailure { throwable ->
-            AndroidAppLogger.error(TAG, "前台推流服务启动会话时发生未处理异常", throwable)
+            AndroidAppLogger.error(
+                TAG,
+                "An unhandled exception occurred while starting the session from the foreground service.",
+                throwable,
+            )
         }
 
         if (!sessionEngine.observeState().value.isStreaming) {
@@ -116,7 +121,11 @@ class MediaProjectionForegroundService : Service() {
         runCatching {
             sessionEngine.stop()
         }.onFailure { throwable ->
-            AndroidAppLogger.error(TAG, "前台推流服务停止会话时发生未处理异常", throwable)
+            AndroidAppLogger.error(
+                TAG,
+                "An unhandled exception occurred while stopping the session from the foreground service.",
+                throwable,
+            )
         }
         exitForeground()
         stopSelfResult(startId)
@@ -166,7 +175,7 @@ class MediaProjectionForegroundService : Service() {
             .build()
 
     private fun StreamingSessionSnapshot.toNotificationText(): String =
-        statusDetail?.takeIf { it.isNotBlank() } ?: when {
+        statusDetail?.let { resolve(it) } ?: when {
             isStreaming -> getString(R.string.streaming_notification_streaming)
             captureState == CaptureState.RequestingPermission ->
                 getString(R.string.streaming_notification_waiting_permission)

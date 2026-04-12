@@ -5,7 +5,7 @@ import org.junit.Test
 
 class ReceiverConnectPayloadCodecTest {
     @Test
-    fun `连接信息可以完成二维码载荷编解码`() {
+    fun `connection info encodes and decodes through the qr payload codec`() {
         val original =
             ReceiverConnectionInfo(
                 receiverName = "Living Room",
@@ -23,35 +23,35 @@ class ReceiverConnectPayloadCodecTest {
     }
 
     @Test(expected = IllegalArgumentException::class)
-    fun `未知载荷类型会抛出异常`() {
+    fun `unknown payload types throw`() {
         ReceiverConnectPayloadCodec.decode(
             """{"type":"unknown","ver":1,"name":"TV","sessionId":"demo","host":"127.0.0.1","port":17888,"auth":"pin"}""",
         )
     }
 
     @Test(expected = IllegalArgumentException::class)
-    fun `不支持的协议版本会抛出异常`() {
+    fun `unsupported protocol versions throw`() {
         ReceiverConnectPayloadCodec.decode(
             """{"type":"receiver-connect","ver":2,"name":"TV","sessionId":"demo","host":"127.0.0.1","port":17888,"auth":"pin"}""",
         )
     }
 
     @Test(expected = IllegalArgumentException::class)
-    fun `缺少主机地址会抛出异常`() {
+    fun `missing hosts throw`() {
         ReceiverConnectPayloadCodec.decode(
             """{"type":"receiver-connect","ver":1,"name":"TV","sessionId":"demo","host":"","port":17888,"auth":"pin"}""",
         )
     }
 
     @Test(expected = IllegalArgumentException::class)
-    fun `非法端口会抛出异常`() {
+    fun `invalid ports throw`() {
         ReceiverConnectPayloadCodec.decode(
             """{"type":"receiver-connect","ver":1,"name":"TV","sessionId":"demo","host":"127.0.0.1","port":70000,"auth":"pin"}""",
         )
     }
 
     @Test(expected = IllegalArgumentException::class)
-    fun `非法json会抛出异常`() {
+    fun `invalid json throws`() {
         ReceiverConnectPayloadCodec.decode("not-json")
     }
 }

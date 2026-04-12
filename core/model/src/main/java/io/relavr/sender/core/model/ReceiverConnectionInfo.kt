@@ -9,10 +9,10 @@ data class ReceiverConnectionInfo(
     val protocolVersion: Int = CURRENT_PROTOCOL_VERSION,
 ) {
     init {
-        require(receiverName.isNotBlank()) { "接收端名称不能为空" }
-        require(sessionId.isNotBlank()) { "Session ID 不能为空" }
-        require(host.isNotBlank()) { "接收端主机地址不能为空" }
-        require(port in 1..65535) { "接收端端口必须在 1 到 65535 之间" }
+        require(receiverName.isNotBlank()) { "Receiver name must not be blank." }
+        require(sessionId.isNotBlank()) { "Session ID must not be blank." }
+        require(host.isNotBlank()) { "Receiver host must not be blank." }
+        require(port in 1..65535) { "Receiver port must be between 1 and 65535." }
     }
 
     val endpoint: String = formatHostAndPort(host, port)

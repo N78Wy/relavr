@@ -23,7 +23,7 @@ class DefaultCodecPolicy : CodecPolicy {
                 defaultCodec != null -> defaultCodec
                 else -> null
             } ?: throw SenderException(
-                SenderError.CapabilityUnavailable("设备未报告可用的视频编码能力"),
+                SenderError.CapabilityUnavailable("The device did not report any available video codec capability."),
             )
 
         return CodecSelection(

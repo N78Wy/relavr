@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -39,6 +40,7 @@ import com.google.zxing.NotFoundException
 import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.common.HybridBinarizer
 import com.google.zxing.qrcode.QRCodeReader
+import io.relavr.sender.core.model.UiText
 import java.util.EnumMap
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -49,7 +51,7 @@ internal fun senderQrScannerOverlay(
     scannerReady: Boolean,
     onDismiss: () -> Unit,
     onPayloadScanned: (String) -> Unit,
-    onFailure: (String) -> Unit,
+    onFailure: (UiText) -> Unit,
 ) {
     Box(
         modifier =
@@ -69,12 +71,12 @@ internal fun senderQrScannerOverlay(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Text(
-                    text = "扫码连接接收端",
+                    text = stringResource(R.string.sender_scanner_title),
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    text = "扫描 receiver 控制台二维码后会自动填入地址并立即发起开播。",
+                    text = stringResource(R.string.sender_scanner_description),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -98,7 +100,7 @@ internal fun senderQrScannerOverlay(
                         ) {
                             CircularProgressIndicator()
                             Text(
-                                text = "正在请求头显相机权限",
+                                text = stringResource(R.string.sender_scanner_requesting_camera_permission),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
@@ -106,7 +108,7 @@ internal fun senderQrScannerOverlay(
                     }
                 }
                 Text(
-                    text = "如果扫码失败，可以关闭弹层后继续手动填写 WebSocket 地址和 Session ID。",
+                    text = stringResource(R.string.sender_scanner_manual_fallback),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -114,7 +116,7 @@ internal fun senderQrScannerOverlay(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("取消扫码")
+                    Text(stringResource(R.string.sender_scanner_cancel))
                 }
             }
         }
@@ -125,7 +127,7 @@ internal fun senderQrScannerOverlay(
 @ExperimentalCamera2Interop
 private fun senderQrScannerPreview(
     onPayloadScanned: (String) -> Unit,
-    onFailure: (String) -> Unit,
+    onFailure: (UiText) -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -175,7 +177,7 @@ private fun senderQrScannerPreview(
                     cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, analysis)
                     bound.set(true)
                 }.onFailure { throwable ->
-                    onFailure(throwable.message ?: "头显相机启动失败")
+                    onFailure(UiText.of(R.string.sender_scanner_camera_start_failed))
                 }
             },
             mainExecutor,
@@ -192,7 +194,7 @@ private fun senderQrScannerPreview(
 
 private class SenderQrCodeAnalyzer(
     private val onPayloadScanned: (String) -> Unit,
-    private val onFailure: (String) -> Unit,
+    private val onFailure: (UiText) -> Unit,
 ) : ImageAnalysis.Analyzer {
     private val delivered = AtomicBoolean(false)
     private val reader = QRCodeReader()
@@ -234,7 +236,7 @@ private class SenderQrCodeAnalyzer(
         } catch (_: FormatException) {
         } catch (throwable: Throwable) {
             if (delivered.compareAndSet(false, true)) {
-                onFailure(throwable.message ?: "二维码识别失败")
+                onFailure(UiText.of(R.string.sender_scanner_decode_failed))
             }
         } finally {
             reader.reset()

@@ -5,7 +5,7 @@ import org.junit.Test
 
 class WebRtcLibraryInitializerTest {
     @Test
-    fun `ensureInitialized 只会执行一次初始化`() {
+    fun `ensureInitialized performs initialization only once`() {
         var initializeCount = 0
         val initializer =
             WebRtcLibraryInitializer {

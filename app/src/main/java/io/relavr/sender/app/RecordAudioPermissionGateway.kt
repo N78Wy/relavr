@@ -35,7 +35,7 @@ internal class AndroidRecordAudioPermissionGateway(
             return true
         }
 
-        check(pendingRequest == null) { "已有待处理的录音权限请求" }
+        check(pendingRequest == null) { "A record-audio permission request is already pending." }
         val deferred = CompletableDeferred<Boolean>()
         pendingRequest = deferred
         _permissionRequests.emit(Manifest.permission.RECORD_AUDIO)

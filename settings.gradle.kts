@@ -8,7 +8,7 @@ pluginManagement {
 }
 
 plugins {
-    // 为主工程启用 Java toolchain 下载解析，避免仅依赖本机自动探测。
+    // Enable Java toolchain resolution for the main build instead of relying only on local discovery.
     id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
 }
 

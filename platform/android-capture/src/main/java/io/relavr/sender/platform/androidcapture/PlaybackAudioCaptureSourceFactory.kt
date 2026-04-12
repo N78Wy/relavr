@@ -35,7 +35,7 @@ class PlaybackAudioCaptureSourceFactory(
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             throw SenderException(
-                SenderError.AudioCaptureUnavailable("当前系统版本不支持 AudioPlaybackCapture"),
+                SenderError.AudioCaptureUnavailable("AudioPlaybackCapture is not supported on this Android version."),
             )
         }
 
@@ -46,7 +46,7 @@ class PlaybackAudioCaptureSourceFactory(
             ) != PackageManager.PERMISSION_GRANTED
         ) {
             throw SenderException(
-                SenderError.AudioCaptureUnavailable("未授予录音权限，音频已降级为仅视频推流"),
+                SenderError.AudioCaptureUnavailable("The audio-record permission is missing, so audio streaming is unavailable."),
             )
         }
 
@@ -82,7 +82,7 @@ class PlaybackAudioCaptureSource : AudioCaptureSource {
             )
         if (minBufferSize <= 0) {
             throw SenderException(
-                SenderError.AudioCaptureUnavailable("无法初始化音频采集缓冲区"),
+                SenderError.AudioCaptureUnavailable("Unable to initialize the audio capture buffer."),
             )
         }
 
@@ -103,7 +103,7 @@ class PlaybackAudioCaptureSource : AudioCaptureSource {
         if (record.state != AudioRecord.STATE_INITIALIZED) {
             record.release()
             throw SenderException(
-                SenderError.AudioCaptureUnavailable("系统拒绝初始化 AudioPlaybackCapture"),
+                SenderError.AudioCaptureUnavailable("The system rejected AudioPlaybackCapture initialization."),
             )
         }
 
@@ -113,7 +113,7 @@ class PlaybackAudioCaptureSource : AudioCaptureSource {
             record.release()
             throw SenderException(
                 SenderError.AudioCaptureUnavailable(
-                    throwable.message ?: "启动 AudioPlaybackCapture 失败",
+                    throwable.message ?: "Starting AudioPlaybackCapture failed.",
                 ),
             )
         }
@@ -121,7 +121,7 @@ class PlaybackAudioCaptureSource : AudioCaptureSource {
         if (record.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
             record.release()
             throw SenderException(
-                SenderError.AudioCaptureUnavailable("系统播放音频采集未进入录制状态"),
+                SenderError.AudioCaptureUnavailable("System playback capture did not enter the recording state."),
             )
         }
 
@@ -134,7 +134,7 @@ class PlaybackAudioCaptureSource : AudioCaptureSource {
     ): AudioFrameReadResult {
         val record =
             audioRecord ?: throw SenderException(
-                SenderError.AudioCaptureUnavailable("系统播放音频采集尚未启动"),
+                SenderError.AudioCaptureUnavailable("System playback capture has not been started yet."),
             )
         if (requestedBytes <= 0) {
             return AudioFrameReadResult(
@@ -162,12 +162,12 @@ class PlaybackAudioCaptureSource : AudioCaptureSource {
 
                 bytesRead == AudioRecord.ERROR_DEAD_OBJECT ->
                     throw SenderException(
-                        SenderError.AudioCaptureUnavailable("系统播放音频采集已中断"),
+                        SenderError.AudioCaptureUnavailable("System playback capture was interrupted."),
                     )
 
                 else ->
                     throw SenderException(
-                        SenderError.AudioCaptureUnavailable("读取系统播放音频失败"),
+                        SenderError.AudioCaptureUnavailable("Reading system playback audio failed."),
                     )
             }
         }

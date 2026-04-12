@@ -28,11 +28,11 @@ data class StreamingSessionSnapshot(
     val captureState: CaptureState = CaptureState.Idle,
     val publishState: PublishState = PublishState.Idle,
     val audioState: AudioStreamState = AudioStreamState.Disabled,
-    val audioDetail: String? = null,
+    val audioDetail: UiText? = null,
     val resolvedConfig: StreamConfig? = null,
     val capabilities: CapabilitySnapshot? = null,
     val codecSelection: CodecSelection? = null,
-    val statusDetail: String? = null,
+    val statusDetail: UiText? = null,
     val error: SenderError? = null,
 ) {
     val isStreaming: Boolean =

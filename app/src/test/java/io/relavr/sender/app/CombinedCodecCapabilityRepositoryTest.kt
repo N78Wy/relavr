@@ -10,7 +10,7 @@ import org.junit.Test
 
 class CombinedCodecCapabilityRepositoryTest {
     @Test
-    fun `返回 Android 与 WebRTC 编码能力交集`() =
+    fun `the intersection of android and webrtc codec capability is returned`() =
         runTest {
             val repository =
                 CombinedCodecCapabilityRepository(
@@ -44,7 +44,7 @@ class CombinedCodecCapabilityRepositoryTest {
         }
 
     @Test
-    fun `H264 不可用时默认编码按回退顺序解析`() =
+    fun `the default codec follows the fallback order when h264 is unavailable`() =
         runTest {
             val repository =
                 CombinedCodecCapabilityRepository(

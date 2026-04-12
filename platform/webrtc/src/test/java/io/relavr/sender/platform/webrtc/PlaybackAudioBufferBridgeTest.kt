@@ -10,7 +10,7 @@ import java.nio.ByteBuffer
 
 class PlaybackAudioBufferBridgeTest {
     @Test
-    fun `onBuffer 会把音频源数据写入回调缓冲区`() {
+    fun `onBuffer writes audio source data into the callback buffer`() {
         val source =
             FakeAudioCaptureSource().also {
                 it.bytes = byteArrayOf(1, 2, 3, 4)
@@ -38,7 +38,7 @@ class PlaybackAudioBufferBridgeTest {
     }
 
     @Test
-    fun `音频读取失败时只会上报一次降级并回退静音`() {
+    fun `audio read failures report degradation once and then fall back to silence`() {
         var degradationCount = 0
         val source =
             FakeAudioCaptureSource().also {

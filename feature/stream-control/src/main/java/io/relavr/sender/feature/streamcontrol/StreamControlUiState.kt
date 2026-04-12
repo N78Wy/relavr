@@ -7,12 +7,13 @@ import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.ReceiverConnectionInfo
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
+import io.relavr.sender.core.model.UiText
 import io.relavr.sender.core.model.VideoResolution
 
 data class CodecOptionUiState(
     val preference: CodecPreference,
     val label: String,
-    val supportLabel: String,
+    val supportLabel: UiText,
     val selected: Boolean,
     val enabled: Boolean,
 )
@@ -25,27 +26,27 @@ data class SelectionOptionUiState<T>(
 )
 
 data class StreamControlUiState(
-    val title: String,
-    val statusLabel: String,
-    val statusDescription: String,
+    val title: UiText,
+    val statusLabel: UiText,
+    val statusDescription: UiText,
     val codecOptions: List<CodecOptionUiState>,
-    val codecStatusLabel: String,
+    val codecStatusLabel: UiText,
     val signalingEndpoint: String,
     val sessionId: String,
     val configEditable: Boolean,
     val scanButtonEnabled: Boolean,
     val scannerVisible: Boolean,
-    val scanStatusLabel: String,
+    val scanStatusLabel: UiText,
     val audioEnabled: Boolean,
     val audioToggleEnabled: Boolean,
-    val audioStatusLabel: String,
-    val streamProfileSummary: String,
+    val audioStatusLabel: UiText,
+    val streamProfileSummary: UiText,
     val resolutionOptions: List<SelectionOptionUiState<VideoResolution>>,
     val fpsOptions: List<SelectionOptionUiState<Int>>,
     val bitrateOptions: List<SelectionOptionUiState<Int>>,
     val startEnabled: Boolean,
     val stopEnabled: Boolean,
-    val errorMessage: String?,
+    val errorMessage: UiText?,
 )
 
 internal fun buildStreamControlUiState(
@@ -64,7 +65,7 @@ internal fun buildStreamControlUiState(
             sessionSnapshot.publishState != PublishState.Idle
 
     return StreamControlUiState(
-        title = "Quest 3 发送控制台",
+        title = UiText.of(R.string.stream_control_title),
         statusLabel = sessionSnapshot.toStatusLabel(),
         statusDescription = sessionSnapshot.toStatusDescription(config),
         codecOptions =
@@ -87,7 +88,13 @@ internal fun buildStreamControlUiState(
             configEditable &&
                 capabilities?.audioPlaybackCaptureSupported != false,
         audioStatusLabel = sessionSnapshot.toAudioStatusLabel(config),
-        streamProfileSummary = "${config.resolution.label} / ${config.fps} FPS / ${config.bitrateKbps} kbps",
+        streamProfileSummary =
+            UiText.of(
+                R.string.stream_control_profile_summary,
+                config.resolution.label,
+                config.fps,
+                config.bitrateKbps,
+            ),
         resolutionOptions =
             buildSelectionOptions(
                 options = StreamConfig.RESOLUTION_OPTIONS,
@@ -112,14 +119,14 @@ internal fun buildStreamControlUiState(
                 sessionSnapshot.captureState != CaptureState.Stopping &&
                 sessionSnapshot.publishState != PublishState.Stopping &&
                 sessionSnapshot.error == null,
-        errorMessage = sessionSnapshot.error?.message,
+        errorMessage = sessionSnapshot.error?.uiText,
     )
 }
 
 data class QrScannerState(
     val visible: Boolean = false,
     val lastReceiver: ReceiverConnectionInfo? = null,
-    val errorMessage: String? = null,
+    val errorMessage: UiText? = null,
 )
 
 private fun <T> buildSelectionOptions(
@@ -137,57 +144,76 @@ private fun <T> buildSelectionOptions(
         )
     }
 
-private fun StreamingSessionSnapshot.toStatusLabel(): String =
+private fun StreamingSessionSnapshot.toStatusLabel(): UiText =
     when {
-        isStreaming -> "推流中"
-        captureState == CaptureState.RequestingPermission -> "等待授权"
-        captureState == CaptureState.Starting || publishState == PublishState.Preparing -> "正在准备"
-        captureState == CaptureState.Stopping || publishState == PublishState.Stopping -> "正在停止"
-        error != null -> "已失败"
-        else -> "空闲"
+        isStreaming -> UiText.of(R.string.stream_control_status_streaming)
+        captureState == CaptureState.RequestingPermission -> UiText.of(R.string.stream_control_status_waiting_permission)
+        captureState == CaptureState.Starting || publishState == PublishState.Preparing ->
+            UiText.of(
+                R.string.stream_control_status_preparing,
+            )
+        captureState == CaptureState.Stopping || publishState == PublishState.Stopping -> UiText.of(R.string.stream_control_status_stopping)
+        error != null -> UiText.of(R.string.stream_control_status_failed)
+        else -> UiText.of(R.string.stream_control_status_idle)
     }
 
-private fun StreamingSessionSnapshot.toStatusDescription(config: StreamConfig): String {
+private fun StreamingSessionSnapshot.toStatusDescription(config: StreamConfig): UiText {
     val resolvedCodec = codecSelection?.resolved?.displayName ?: config.codecPreference.displayName
     statusDetail?.let { detail ->
         return detail
     }
     return when {
-        error != null -> error?.message.orEmpty()
+        error != null -> error?.uiText ?: UiText.of(R.string.stream_control_status_failed)
         else ->
-            "默认配置：${config.resolution.label} / ${config.fps} FPS / $resolvedCodec / ${config.trimmedSessionId}"
+            UiText.of(
+                R.string.stream_control_default_profile,
+                config.resolution.label,
+                config.fps,
+                resolvedCodec,
+                config.trimmedSessionId,
+            )
     }
 }
 
-private fun StreamingSessionSnapshot.toAudioStatusLabel(config: StreamConfig): String =
+private fun StreamingSessionSnapshot.toAudioStatusLabel(config: StreamConfig): UiText =
     when {
-        capabilities?.audioPlaybackCaptureSupported == false -> "当前设备不支持 AudioPlaybackCapture"
-        !config.audioEnabled -> "音频已关闭"
-        audioState == AudioStreamState.Starting -> "音频准备中"
-        audioState == AudioStreamState.Publishing -> "音频推流中"
-        audioState == AudioStreamState.Degraded -> audioDetail ?: "音频已降级为静音/仅视频"
-        else -> "开始推流后会采集系统播放音频"
+        capabilities?.audioPlaybackCaptureSupported == false -> UiText.of(R.string.stream_control_audio_unsupported)
+        !config.audioEnabled -> UiText.of(R.string.stream_control_audio_disabled)
+        audioState == AudioStreamState.Starting -> UiText.of(R.string.stream_control_audio_starting)
+        audioState == AudioStreamState.Publishing -> UiText.of(R.string.stream_control_audio_publishing)
+        audioState == AudioStreamState.Degraded ->
+            audioDetail
+                ?: UiText.of(io.relavr.sender.core.model.R.string.sender_audio_degraded_video_only)
+        else -> UiText.of(R.string.stream_control_audio_default)
     }
 
-private fun StreamingSessionSnapshot.toCodecStatusLabel(config: StreamConfig): String {
+private fun StreamingSessionSnapshot.toCodecStatusLabel(config: StreamConfig): UiText {
     val requestedCodec = config.codecPreference.displayName
     val resolvedCodec = codecSelection?.resolved?.displayName
     val capabilitySnapshot = capabilities
     return when {
         codecSelection?.fellBack == true && resolvedCodec != null ->
-            "本次请求 $requestedCodec，实际使用 $resolvedCodec"
-        resolvedCodec != null -> "本次会话使用 $resolvedCodec"
+            UiText.of(R.string.stream_control_codec_fallback, requestedCodec, resolvedCodec)
+        resolvedCodec != null -> UiText.of(R.string.stream_control_codec_active, resolvedCodec)
         capabilitySnapshot == null ->
-            "默认优先 ${CodecPreference.H264.displayName}，正在探测设备与 WebRTC 编码能力"
+            UiText.of(R.string.stream_control_codec_probable_default, CodecPreference.H264.displayName)
         capabilitySnapshot.supports(config.codecPreference) &&
             capabilitySnapshot.defaultCodec == config.codecPreference ->
-            "当前选择为设备推荐默认：$requestedCodec"
+            UiText.of(R.string.stream_control_codec_device_default, requestedCodec)
         capabilitySnapshot.supports(config.codecPreference) ->
-            "当前选择 $requestedCodec；设备推荐默认 ${capabilitySnapshot.defaultCodec.displayName}"
+            UiText.of(
+                R.string.stream_control_codec_device_recommended,
+                requestedCodec,
+                capabilitySnapshot.defaultCodec.displayName,
+            )
         capabilitySnapshot.supportedCodecs.isEmpty() ->
-            "当前设备没有可用的视频编码能力"
+            UiText.of(R.string.stream_control_codec_unavailable)
         else ->
-            "当前设备不支持 $requestedCodec，开始推流时会回退到 ${capabilitySnapshot.defaultCodec.displayName}"
+            UiText.of(
+                R.string.stream_control_codec_will_fallback,
+                requestedCodec,
+                capabilitySnapshot.defaultCodec.displayName,
+            )
     }
 }
 
@@ -205,11 +231,11 @@ private fun CodecPreference.toCodecOptionUiState(
             }
     val supportLabel =
         when {
-            capabilities == null && this == CodecPreference.H264 -> "默认优先"
-            capabilities == null -> "等待能力探测"
-            isSupported && capabilities.defaultCodec == this -> "设备推荐默认"
-            isSupported -> "设备支持"
-            else -> "设备或 WebRTC 不支持"
+            capabilities == null && this == CodecPreference.H264 -> UiText.of(R.string.stream_control_codec_support_default)
+            capabilities == null -> UiText.of(R.string.stream_control_codec_support_loading)
+            isSupported && capabilities.defaultCodec == this -> UiText.of(R.string.stream_control_codec_support_device_default)
+            isSupported -> UiText.of(R.string.stream_control_codec_support_available)
+            else -> UiText.of(R.string.stream_control_codec_support_unavailable)
         }
 
     return CodecOptionUiState(
@@ -221,12 +247,16 @@ private fun CodecPreference.toCodecOptionUiState(
     )
 }
 
-private fun QrScannerState.toStatusLabel(): String =
+private fun QrScannerState.toStatusLabel(): UiText =
     when {
-        visible -> "请将接收端二维码放到头显相机中央，识别后会自动开播"
+        visible -> UiText.of(R.string.stream_control_scan_waiting)
         errorMessage != null -> errorMessage
         lastReceiver != null && lastReceiver.authRequired ->
-            "最近扫码：${lastReceiver.receiverName}（${lastReceiver.endpoint}），接收端仍需本地确认"
-        lastReceiver != null -> "最近扫码：${lastReceiver.receiverName}（${lastReceiver.endpoint}）"
-        else -> "扫描 receiver 控制台二维码后会自动回填地址并立即开播"
+            UiText.of(
+                R.string.stream_control_scan_recent_requires_confirmation,
+                lastReceiver.receiverName,
+                lastReceiver.endpoint,
+            )
+        lastReceiver != null -> UiText.of(R.string.stream_control_scan_recent, lastReceiver.receiverName, lastReceiver.endpoint)
+        else -> UiText.of(R.string.stream_control_scan_default)
     }

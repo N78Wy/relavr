@@ -32,7 +32,8 @@ internal object JsonSignalingMessageCodec {
             is SignalingMessage.Leave -> Unit
 
             is SignalingMessage.Error -> {
-                fields["message"] = message.message
+                message.code?.let { fields["code"] = it }
+                message.message?.let { fields["message"] = it }
             }
         }
 
@@ -96,10 +97,11 @@ internal object JsonSignalingMessageCodec {
             TYPE_ERROR ->
                 SignalingMessage.Error(
                     sessionId = sessionId,
-                    message = fields.requireString("message"),
+                    code = fields["code"],
+                    message = fields["message"],
                 )
 
-            else -> throw IllegalArgumentException("未知的信令消息类型: $type")
+            else -> throw IllegalArgumentException("Unknown signaling message type: $type")
         }
     }
 
@@ -132,12 +134,12 @@ internal object JsonSignalingMessageCodec {
     private fun Map<String, String>.requireString(key: String): String =
         get(key)
             ?.takeIf { it.isNotBlank() }
-            ?: throw IllegalArgumentException("缺少字符串字段: $key")
+            ?: throw IllegalArgumentException("Missing string field: $key")
 
     private fun Map<String, String>.requireInt(key: String): Int =
         get(key)
             ?.toIntOrNull()
-            ?: throw IllegalArgumentException("缺少整数字段: $key")
+            ?: throw IllegalArgumentException("Missing integer field: $key")
 
     private const val TYPE_JOIN = "join"
     private const val TYPE_OFFER = "offer"
@@ -189,11 +191,11 @@ private class FlatJsonParser(
                     return result
                 }
 
-                else -> throw IllegalArgumentException("JSON 结构无效")
+                else -> throw IllegalArgumentException("Invalid JSON structure")
             }
         }
 
-        throw IllegalArgumentException("JSON 对象缺少结束符")
+        throw IllegalArgumentException("The JSON object is missing a closing delimiter.")
     }
 
     private fun readQuotedString(): String {
@@ -207,12 +209,12 @@ private class FlatJsonParser(
                 else -> builder.append(char)
             }
         }
-        throw IllegalArgumentException("JSON 字符串缺少结束引号")
+        throw IllegalArgumentException("The JSON string is missing a closing quote.")
     }
 
     private fun readEscape(): Char {
         if (index >= source.length) {
-            throw IllegalArgumentException("JSON 转义序列不完整")
+            throw IllegalArgumentException("The JSON escape sequence is incomplete.")
         }
         return when (val escaped = source[index++]) {
             '"', '\\', '/' -> escaped
@@ -222,13 +224,13 @@ private class FlatJsonParser(
             'r' -> '\r'
             't' -> '\t'
             'u' -> readUnicodeEscape()
-            else -> throw IllegalArgumentException("不支持的 JSON 转义: \\$escaped")
+            else -> throw IllegalArgumentException("Unsupported JSON escape: \\$escaped")
         }
     }
 
     private fun readUnicodeEscape(): Char {
         if (index + 4 > source.length) {
-            throw IllegalArgumentException("Unicode 转义长度不足")
+            throw IllegalArgumentException("The Unicode escape sequence is too short.")
         }
         val hex = source.substring(index, index + 4)
         index += 4
@@ -241,21 +243,21 @@ private class FlatJsonParser(
             index += 1
         }
         if (start == index) {
-            throw IllegalArgumentException("JSON 字段值为空")
+            throw IllegalArgumentException("The JSON field value is empty.")
         }
         return source.substring(start, index)
     }
 
     private fun expect(expected: Char) {
         if (peek() != expected) {
-            throw IllegalArgumentException("JSON 结构无效，期望字符: $expected")
+            throw IllegalArgumentException("Invalid JSON structure. Expected character: $expected")
         }
         index += 1
     }
 
     private fun peek(): Char {
         if (index >= source.length) {
-            throw IllegalArgumentException("JSON 内容意外结束")
+            throw IllegalArgumentException("Unexpected end of JSON content.")
         }
         return source[index]
     }

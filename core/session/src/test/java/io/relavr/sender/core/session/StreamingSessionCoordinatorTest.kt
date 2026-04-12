@@ -6,6 +6,7 @@ import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
+import io.relavr.sender.core.model.UiText
 import io.relavr.sender.testing.fakes.FakeAppLogger
 import io.relavr.sender.testing.fakes.FakeAudioCaptureSource
 import io.relavr.sender.testing.fakes.FakeAudioCaptureSourceFactory
@@ -29,7 +30,7 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class StreamingSessionCoordinatorTest {
     @Test
-    fun `start 成功后进入推流中状态`() =
+    fun `start enters the streaming state on success`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val projectionAccess = FakeProjectionAccess()
@@ -65,12 +66,12 @@ class StreamingSessionCoordinatorTest {
             assertEquals(AudioStreamState.Disabled, state.audioState)
             assertEquals(1, rtcPublisherFactory.session.publishCount)
             assertEquals(1, signalingClient.openCount)
-            assertEquals("WebRTC 已连接，正在发送视频", state.statusDetail)
+            assertEquals(UiText.of(io.relavr.sender.core.model.R.string.sender_status_streaming_video_only), state.statusDetail)
             assertNull(state.error)
         }
 
     @Test
-    fun `非法配置会直接写入错误状态`() =
+    fun `invalid config writes an error state immediately`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val projectionGateway = FakeProjectionPermissionGateway()
@@ -92,12 +93,18 @@ class StreamingSessionCoordinatorTest {
             val state = coordinator.observeState().value
             assertEquals(CaptureState.Error, state.captureState)
             assertEquals(PublishState.Error, state.publishState)
-            assertEquals(SenderError.InvalidConfig("Session ID 不能为空"), state.error)
+            assertEquals(
+                SenderError.InvalidConfig(
+                    message = "The session ID is required.",
+                    uiText = UiText.of(io.relavr.sender.core.model.R.string.sender_error_session_id_required),
+                ),
+                state.error,
+            )
             assertEquals(0, projectionGateway.requestCount)
         }
 
     @Test
-    fun `start 被拒绝授权时写入错误状态`() =
+    fun `permission denial during start writes an error state`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val logger = FakeAppLogger()
@@ -130,13 +137,13 @@ class StreamingSessionCoordinatorTest {
                 logger.errorLogs
                     .single()
                     .message
-                    .contains("请求投屏权限失败"),
+                    .contains("Requesting the screen-capture permission failed"),
             )
             assertNotNull(logger.errorLogs.single().throwable)
         }
 
     @Test
-    fun `stop 会释放已创建资源`() =
+    fun `stop releases created resources`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val projectionAccess = FakeProjectionAccess()
@@ -178,7 +185,7 @@ class StreamingSessionCoordinatorTest {
         }
 
     @Test
-    fun `音频采集初始化失败时会降级为仅视频推流`() =
+    fun `audio capture initialization failures degrade to video-only streaming`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val audioCaptureSourceFactory =
@@ -209,12 +216,15 @@ class StreamingSessionCoordinatorTest {
             assertEquals(CaptureState.Capturing, state.captureState)
             assertEquals(PublishState.Publishing, state.publishState)
             assertEquals(AudioStreamState.Degraded, state.audioState)
-            assertEquals("fake-audio-failure", state.audioDetail)
-            assertEquals("WebRTC 已连接，正在发送视频", state.statusDetail)
+            assertEquals(
+                UiText.of(io.relavr.sender.core.model.R.string.sender_error_audio_capture_unavailable),
+                state.audioDetail,
+            )
+            assertEquals(UiText.of(io.relavr.sender.core.model.R.string.sender_status_streaming_video_only), state.statusDetail)
         }
 
     @Test
-    fun `rtc 会话断开后会写入错误状态并释放资源`() =
+    fun `an rtc disconnect writes an error state and releases resources`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val projectionAccess = FakeProjectionAccess()
@@ -239,12 +249,12 @@ class StreamingSessionCoordinatorTest {
             val state = coordinator.observeState().value
             assertEquals(CaptureState.Error, state.captureState)
             assertEquals(PublishState.Error, state.publishState)
-            assertEquals(SenderError.PeerConnectionFailed("WebRTC 连接已断开"), state.error)
+            assertEquals(SenderError.PeerConnectionFailed("The WebRTC connection was disconnected."), state.error)
             assertTrue(projectionAccess.closed)
         }
 
     @Test
-    fun `运行中音频降级事件不会终止视频推流`() =
+    fun `audio degradation during streaming does not stop video publishing`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val rtcPublisherFactory = FakeRtcPublisherFactory()
@@ -268,20 +278,27 @@ class StreamingSessionCoordinatorTest {
             )
             advanceUntilIdle()
 
-            rtcPublisherFactory.session.emitEvent(RtcSessionEvent.AudioDegraded("音频已回退为静音"))
+            rtcPublisherFactory.session.emitEvent(
+                RtcSessionEvent.AudioDegraded(
+                    UiText.of(io.relavr.sender.core.model.R.string.sender_audio_degraded_video_only),
+                ),
+            )
             advanceUntilIdle()
 
             val state = coordinator.observeState().value
             assertEquals(CaptureState.Capturing, state.captureState)
             assertEquals(PublishState.Publishing, state.publishState)
             assertEquals(AudioStreamState.Degraded, state.audioState)
-            assertEquals("音频已回退为静音", state.audioDetail)
-            assertEquals("WebRTC 已连接，正在发送视频", state.statusDetail)
+            assertEquals(
+                UiText.of(io.relavr.sender.core.model.R.string.sender_audio_degraded_video_only),
+                state.audioDetail,
+            )
+            assertEquals(UiText.of(io.relavr.sender.core.model.R.string.sender_status_streaming_video_only), state.statusDetail)
             assertNull(state.error)
         }
 
     @Test
-    fun `start 失败时写入异常日志`() =
+    fun `start failures write error logs`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val rtcPublisherFactory =
@@ -314,7 +331,7 @@ class StreamingSessionCoordinatorTest {
                 logger.errorLogs
                     .single()
                     .message
-                    .contains("启动推流会话失败"),
+                    .contains("Starting the streaming session failed"),
             )
             assertTrue(
                 logger.errorLogs

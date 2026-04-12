@@ -6,5 +6,4 @@
 local.properties
 captures/
 **/build/
-demo/browser-preview/node_modules/
 /.kotlin/

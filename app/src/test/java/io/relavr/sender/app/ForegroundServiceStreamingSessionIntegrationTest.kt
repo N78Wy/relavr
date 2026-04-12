@@ -6,6 +6,7 @@ import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.StreamConfig
+import io.relavr.sender.core.model.UiText
 import io.relavr.sender.core.model.VideoResolution
 import io.relavr.sender.core.session.StreamingSessionCoordinator
 import io.relavr.sender.testing.fakes.FakeAppLogger
@@ -29,7 +30,7 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class ForegroundServiceStreamingSessionIntegrationTest {
     @Test
-    fun `服务控制器会透传底层会话引擎的推流状态`() =
+    fun `the service controller forwards the streaming state from the session engine`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val projectionAccess = FakeProjectionAccess()
@@ -87,7 +88,10 @@ class ForegroundServiceStreamingSessionIntegrationTest {
             assertEquals(CaptureState.Capturing, controller.observeState().value.captureState)
             assertEquals(PublishState.Publishing, controller.observeState().value.publishState)
             assertEquals(AudioStreamState.Publishing, controller.observeState().value.audioState)
-            assertEquals("WebRTC 已连接，正在发送音视频", controller.observeState().value.statusDetail)
+            assertEquals(
+                UiText.of(io.relavr.sender.core.model.R.string.sender_status_streaming_audio_video),
+                controller.observeState().value.statusDetail,
+            )
             assertEquals(CodecPreference.HEVC, signalingClient.lastOpenedConfig?.codecPreference)
             assertEquals(VideoResolution(width = 1920, height = 1080), signalingClient.lastOpenedConfig?.resolution)
             assertEquals(60, signalingClient.lastOpenedConfig?.fps)

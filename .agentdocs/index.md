@@ -4,10 +4,8 @@
 ## Android 文档
 `android/architecture.md` - 多模块边界、依赖方向、构建约束与测试基线；修改模块结构或公共接口时必读。
 
-## 当前任务文档
-（暂无）
-
 ## 已完成任务文档
+`workflow/done/260412-bilingualize-code-and-ui.md` - 已完成双仓实现层英文化、Android / 浏览器页双语接入、应用内语言切换与验收。
 `workflow/done/260412-remove-mdns-discovery.md` - 已移除 sender 侧全部 mDNS discovery 代码、控制台 UI、模块依赖与当前记忆。
 `workflow/done/260412-fix-reconnect-after-first-session.md` - 修复首次推流结束后 receiver 被旧 ICE 打进错误态，导致第二次 sender 连接直接被拒绝的问题。
 `workflow/done/260411-fix-discovery-signaling-endpoint.md` - 修复 sender 通过 mDNS 发现 receiver 后使用错误 signaling 端口导致的连接被拒绝问题，并记录双仓对齐策略。

@@ -21,7 +21,7 @@ class AndroidProjectionPermissionGateway(
     val permissionRequests: SharedFlow<Intent> = _permissionRequests.asSharedFlow()
 
     override suspend fun requestPermission(): ProjectionAccess {
-        check(pendingRequest == null) { "已有待处理的屏幕采集授权请求" }
+        check(pendingRequest == null) { "A screen-capture permission request is already pending." }
         val deferred = CompletableDeferred<ProjectionAccess>()
         pendingRequest = deferred
         _permissionRequests.emit(mediaProjectionManager.createScreenCaptureIntent())

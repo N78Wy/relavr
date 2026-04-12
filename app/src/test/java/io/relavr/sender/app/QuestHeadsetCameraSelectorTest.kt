@@ -6,7 +6,7 @@ import org.junit.Test
 
 class QuestHeadsetCameraSelectorTest {
     @Test
-    fun `优先选择 vendor tag 标记为 rgb passthrough 的相机`() {
+    fun `the camera tagged as rgb passthrough is preferred first`() {
         val selectedCameraId =
             QuestHeadsetCameraSelector.pickPreferredPassthroughCameraId(
                 linkedMapOf(
@@ -20,7 +20,7 @@ class QuestHeadsetCameraSelectorTest {
     }
 
     @Test
-    fun `没有 passthrough 标记时返回空`() {
+    fun `null is returned when no passthrough tag is present`() {
         val selectedCameraId =
             QuestHeadsetCameraSelector.pickPreferredPassthroughCameraId(
                 linkedMapOf(

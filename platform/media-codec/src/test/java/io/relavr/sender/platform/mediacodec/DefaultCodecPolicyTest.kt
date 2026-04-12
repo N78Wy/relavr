@@ -11,7 +11,7 @@ class DefaultCodecPolicyTest {
     private val policy = DefaultCodecPolicy()
 
     @Test
-    fun `优先返回用户选择的编码`() {
+    fun `the selected codec is returned first when supported`() {
         val selection =
             policy.select(
                 preference = CodecPreference.HEVC,
@@ -28,7 +28,7 @@ class DefaultCodecPolicyTest {
     }
 
     @Test
-    fun `用户选择不支持时回退到 H264`() {
+    fun `unsupported selections fall back to h264`() {
         val selection =
             policy.select(
                 preference = CodecPreference.VP9,
@@ -45,7 +45,7 @@ class DefaultCodecPolicyTest {
     }
 
     @Test
-    fun `H264 不可用时回退到设备默认编码`() {
+    fun `the device default is used when h264 is unavailable`() {
         val selection =
             policy.select(
                 preference = CodecPreference.H264,
@@ -62,7 +62,7 @@ class DefaultCodecPolicyTest {
     }
 
     @Test(expected = SenderException::class)
-    fun `设备没有任何编码能力时抛错`() {
+    fun `an exception is thrown when the device has no codec capability`() {
         policy.select(
             preference = CodecPreference.H264,
             capabilities =
