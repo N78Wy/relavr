@@ -9,6 +9,7 @@ class StreamConfigTest {
     fun `default profiles use controlled candidate values`() {
         val config = StreamConfig()
 
+        assertEquals(true, config.audioEnabled)
         assertEquals(StreamConfig.DEFAULT_RESOLUTION, config.resolution)
         assertEquals(StreamConfig.DEFAULT_FPS, config.fps)
         assertEquals(StreamConfig.DEFAULT_BITRATE_KBPS, config.bitrateKbps)

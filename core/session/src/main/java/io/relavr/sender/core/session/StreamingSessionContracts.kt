@@ -1,6 +1,8 @@
 package io.relavr.sender.core.session
 
 import android.content.Intent
+import android.media.projection.MediaProjection
+import io.relavr.sender.core.model.AudioState
 import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.CodecSelection
@@ -28,6 +30,31 @@ interface ProjectionPermissionGateway {
 
 interface CodecCapabilityRepository {
     suspend fun getCapabilities(): CapabilitySnapshot
+}
+
+data class AudioCaptureFormat(
+    val sampleRateHz: Int,
+    val channelCount: Int,
+    val bytesPerSample: Int = 2,
+) {
+    val bytesPerFrame: Int = channelCount * bytesPerSample
+    val bytesPer10Ms: Int = (sampleRateHz / 100) * bytesPerFrame
+}
+
+interface PlaybackAudioCaptureSession : Closeable {
+    val format: AudioCaptureFormat
+
+    fun start()
+
+    fun read(
+        buffer: ByteArray,
+        offsetInBytes: Int,
+        sizeInBytes: Int,
+    ): Int
+}
+
+fun interface PlaybackAudioCaptureSessionFactory {
+    fun create(mediaProjection: MediaProjection): PlaybackAudioCaptureSession
 }
 
 fun interface CodecPolicy {
@@ -106,13 +133,23 @@ sealed interface RtcSessionEvent {
         val error: SenderError.VideoEncoderOverloaded,
     ) : RtcSessionEvent
 
+    data class AudioDegraded(
+        val detail: UiText,
+        val reason: String,
+    ) : RtcSessionEvent
+
     data object Disconnected : RtcSessionEvent
 }
+
+data class PublishStartResult(
+    val audioState: AudioState,
+    val audioDetail: UiText? = null,
+)
 
 interface RtcPublishSession : Closeable {
     val events: Flow<RtcSessionEvent>
 
-    suspend fun publish(projectionAccess: ProjectionAccess)
+    suspend fun publish(projectionAccess: ProjectionAccess): PublishStartResult
 }
 
 fun interface RtcPublisherFactory {

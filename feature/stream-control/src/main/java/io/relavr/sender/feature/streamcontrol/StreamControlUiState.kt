@@ -1,5 +1,6 @@
 package io.relavr.sender.feature.streamcontrol
 
+import io.relavr.sender.core.model.AudioState
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.PublishState
@@ -9,6 +10,7 @@ import io.relavr.sender.core.model.StreamingSessionSnapshot
 import io.relavr.sender.core.model.UiText
 import io.relavr.sender.core.model.VideoResolution
 import io.relavr.sender.core.model.VideoStreamProfile
+import io.relavr.sender.core.session.RecordAudioPermissionState
 
 data class CodecOptionUiState(
     val preference: CodecPreference,
@@ -34,6 +36,10 @@ data class StreamControlUiState(
     val signalingEndpoint: String,
     val sessionId: String,
     val configEditable: Boolean,
+    val audioEnabled: Boolean,
+    val audioConfigEnabled: Boolean,
+    val audioSettingsVisible: Boolean,
+    val audioStatusDescription: UiText,
     val scanButtonEnabled: Boolean,
     val scannerVisible: Boolean,
     val scanStatusLabel: UiText,
@@ -49,13 +55,16 @@ data class StreamControlUiState(
 internal fun buildStreamControlUiState(
     config: StreamConfig,
     scannerState: QrScannerState = QrScannerState(),
+    recordAudioPermissionState: RecordAudioPermissionState = RecordAudioPermissionState.Requestable,
+    audioPermissionRequestPending: Boolean = false,
     sessionSnapshot: StreamingSessionSnapshot,
 ): StreamControlUiState {
     val capabilities = sessionSnapshot.capabilities
     val configEditable =
         !sessionSnapshot.isStreaming &&
             sessionSnapshot.captureState != CaptureState.RequestingPermission &&
-            sessionSnapshot.publishState != PublishState.Preparing
+            sessionSnapshot.publishState != PublishState.Preparing &&
+            !audioPermissionRequestPending
     val capabilityValidationError =
         capabilities?.let { capabilitySnapshot ->
             config.validationError(capabilitySnapshot)
@@ -81,6 +90,15 @@ internal fun buildStreamControlUiState(
         signalingEndpoint = config.signalingEndpoint,
         sessionId = config.sessionId,
         configEditable = configEditable,
+        audioEnabled = config.audioEnabled,
+        audioConfigEnabled = configEditable,
+        audioSettingsVisible = recordAudioPermissionState == RecordAudioPermissionState.PermanentlyDenied,
+        audioStatusDescription =
+            sessionSnapshot.toAudioStatusDescription(
+                config = config,
+                permissionState = recordAudioPermissionState,
+                permissionRequestPending = audioPermissionRequestPending,
+            ),
         scanButtonEnabled = configEditable,
         scannerVisible = scannerState.visible,
         scanStatusLabel = scannerState.toStatusLabel(),
@@ -160,6 +178,45 @@ private fun StreamingSessionSnapshot.toStatusDescription(config: StreamConfig): 
                 resolvedCodec,
                 config.trimmedSessionId,
             )
+    }
+}
+
+private fun StreamingSessionSnapshot.toAudioStatusDescription(
+    config: StreamConfig,
+    permissionState: RecordAudioPermissionState,
+    permissionRequestPending: Boolean,
+): UiText {
+    if (permissionRequestPending) {
+        return UiText.of(R.string.stream_control_audio_permission_pending)
+    }
+
+    when (audioState) {
+        AudioState.Capturing,
+        AudioState.VideoOnlyFallback,
+        AudioState.Degraded,
+        -> {
+            audioDetail?.let { return it }
+        }
+
+        AudioState.Preparing ->
+            return audioDetail ?: UiText.of(io.relavr.sender.core.model.R.string.sender_status_preparing_system_audio)
+
+        AudioState.Disabled -> Unit
+    }
+
+    if (!config.audioEnabled) {
+        return UiText.of(R.string.stream_control_audio_disabled_hint)
+    }
+
+    return when (permissionState) {
+        RecordAudioPermissionState.Granted ->
+            UiText.of(R.string.stream_control_audio_enabled_hint)
+
+        RecordAudioPermissionState.Requestable ->
+            UiText.of(R.string.stream_control_audio_requestable_hint)
+
+        RecordAudioPermissionState.PermanentlyDenied ->
+            UiText.of(R.string.stream_control_audio_permission_denied_hint)
     }
 }
 

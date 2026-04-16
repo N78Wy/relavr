@@ -31,6 +31,15 @@
     <string name="stream_control_language_simplified_chinese">简体中文</string>
     <string name="stream_control_config_title">发送配置</string>
     <string name="stream_control_codec_title">视频编码</string>
+    <string name="stream_control_audio_title">系统音频</string>
+    <string name="stream_control_audio_on">带声音</string>
+    <string name="stream_control_audio_off">仅视频</string>
+    <string name="stream_control_audio_enabled_hint">开始推流时，Relavr 会尝试捕获那些允许 AudioPlaybackCapture 的其他 app 媒体声或游戏声。</string>
+    <string name="stream_control_audio_requestable_hint">开始推流前会请求录音权限；授权后才能捕获其他 app 的媒体声或游戏声，且仅限系统允许被捕获的应用。</string>
+    <string name="stream_control_audio_permission_denied_hint">录音权限已被永久拒绝。当前仍可继续仅视频推流，如需恢复系统音频，请前往系统设置重新开启权限。</string>
+    <string name="stream_control_audio_disabled_hint">系统音频已关闭，本次会话只发送视频。</string>
+    <string name="stream_control_audio_permission_pending">正在等待录音权限结果。</string>
+    <string name="stream_control_audio_open_settings">打开系统设置</string>
     <string name="stream_control_endpoint_label">WebSocket 地址</string>
     <string name="stream_control_endpoint_placeholder">例如 ws://192.168.1.20:8080/ws 或 wss://signal.example/ws</string>
     <string name="stream_control_endpoint_hint">局域网 receiver app 请填写 ws://192.168.1.20:8080/ws；部署到 HTTPS 的 browser-preview 请填写 wss://signal.example/ws；10.0.2.2 仅适用于 Android 模拟器。</string>

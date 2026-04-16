@@ -3,6 +3,7 @@ package io.relavr.sender.app
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -51,6 +52,7 @@ internal class PreferencesStreamControlConfigStore(
 
 internal val SIGNALING_ENDPOINT_KEY = stringPreferencesKey("stream_control.signaling_endpoint")
 internal val SESSION_ID_KEY = stringPreferencesKey("stream_control.session_id")
+internal val AUDIO_ENABLED_KEY = booleanPreferencesKey("stream_control.audio_enabled")
 internal val CODEC_PREFERENCE_KEY = stringPreferencesKey("stream_control.codec_preference")
 internal val RESOLUTION_WIDTH_KEY = intPreferencesKey("stream_control.resolution_width")
 internal val RESOLUTION_HEIGHT_KEY = intPreferencesKey("stream_control.resolution_height")
@@ -61,6 +63,7 @@ private fun Preferences.toStreamConfig(): StreamConfig =
     StreamConfig(
         signalingEndpoint = this[SIGNALING_ENDPOINT_KEY] ?: defaultStreamConfig.signalingEndpoint,
         sessionId = this[SESSION_ID_KEY] ?: defaultStreamConfig.sessionId,
+        audioEnabled = this[AUDIO_ENABLED_KEY] ?: defaultStreamConfig.audioEnabled,
         codecPreference =
             CodecPreference.entries.firstOrNull { preference ->
                 preference.name == this[CODEC_PREFERENCE_KEY]
@@ -80,6 +83,7 @@ private fun Preferences.toStreamConfig(): StreamConfig =
 private fun androidx.datastore.preferences.core.MutablePreferences.updateFrom(config: StreamConfig) {
     this[SIGNALING_ENDPOINT_KEY] = config.signalingEndpoint
     this[SESSION_ID_KEY] = config.sessionId
+    this[AUDIO_ENABLED_KEY] = config.audioEnabled
     this[CODEC_PREFERENCE_KEY] = config.codecPreference.name
     this[RESOLUTION_WIDTH_KEY] = config.resolution.width
     this[RESOLUTION_HEIGHT_KEY] = config.resolution.height

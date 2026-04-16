@@ -12,7 +12,7 @@
 - 采用中度扩展的 Android 多模块结构，保留 `app`、`feature`、`core`、`platform`、`testing` 分层。
 - 默认编码偏好为 H.264 优先；发送控制台支持在开播前切换到 HEVC、VP8、VP9，实际可选集合由设备 MediaCodec 与 libwebrtc 能力交集决定。
 - 发送控制台支持在开播前切换分辨率、帧率和码率，当前使用内置安全档位而非自由输入。
-- 当前版本固定为视频-only：不申请 `RECORD_AUDIO`，不实现系统音频采集，也不暴露音频开关。
+- 当前版本支持可选系统音频推流：申请 `RECORD_AUDIO`，通过 `AudioPlaybackCapture` 采集其他 app 允许被系统捕获的媒体声或游戏声；发送控制台暴露音频开关且默认开启，音频不可用时自动回退到 video-only。
 
 ## 非目标
 - 不实现房间、多路流、鉴权、录制、转码。

@@ -22,7 +22,9 @@
     <string name="sender_status_probing_codec_capabilities">正在探测设备编码能力。</string>
     <string name="sender_status_connecting_signaling">正在连接信令服务器。</string>
     <string name="sender_status_preparing_video_track">正在准备 WebRTC 视频轨道。</string>
+    <string name="sender_status_preparing_system_audio">正在准备系统音频采集。</string>
     <string name="sender_status_streaming_video_only">WebRTC 已连接，正在发送视频。</string>
+    <string name="sender_status_streaming_video_with_audio">WebRTC 已连接，正在发送视频和系统音频。</string>
     <string name="sender_status_releasing_resources">正在释放推流资源。</string>
     <string name="sender_status_starting_foreground_service">正在启动前台推流服务。</string>
     <string name="sender_status_sending_stop_command">正在发送停止命令。</string>
@@ -36,4 +38,8 @@
     <string name="sender_status_video_profile_downgraded">检测到编码器过载，已自动降为 %1$s / %2$d FPS / %3$d kbps。</string>
     <string name="sender_status_default_idle">已准备好开始推流。</string>
     <string name="sender_status_permission_requested">已发起权限请求，请完成系统弹窗。</string>
+    <string name="sender_status_audio_capture_active">系统音频采集已启用。</string>
+    <string name="sender_status_audio_disabled">本次会话未启用系统音频。</string>
+    <string name="sender_status_audio_start_fallback">系统音频不可用，当前仅发送视频。</string>
+    <string name="sender_status_audio_runtime_degraded">推流中的系统音频已失败，当前已降级为静音。</string>
 </resources>

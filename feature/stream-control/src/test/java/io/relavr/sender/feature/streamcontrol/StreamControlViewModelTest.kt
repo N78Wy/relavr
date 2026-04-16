@@ -6,6 +6,8 @@ import io.relavr.sender.core.model.ReceiverConnectPayloadCodec
 import io.relavr.sender.core.model.ReceiverConnectionInfo
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.VideoResolution
+import io.relavr.sender.core.session.RecordAudioPermissionState
+import io.relavr.sender.testing.fakes.FakeRecordAudioPermissionController
 import io.relavr.sender.testing.fakes.FakeStreamingSessionController
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +19,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -55,6 +58,7 @@ class StreamControlViewModelTest {
                 StreamControlViewModel(
                     sessionController = controller,
                     configStore = configStore,
+                    recordAudioPermissionController = FakeRecordAudioPermissionController(),
                 )
 
             advanceUntilIdle()
@@ -88,6 +92,7 @@ class StreamControlViewModelTest {
                 StreamControlViewModel(
                     sessionController = controller,
                     configStore = configStore,
+                    recordAudioPermissionController = FakeRecordAudioPermissionController(),
                 )
 
             viewModel.onSignalingEndpointChanged("ws://draft.example/ws")
@@ -110,6 +115,7 @@ class StreamControlViewModelTest {
                 StreamControlViewModel(
                     sessionController = controller,
                     configStore = configStore,
+                    recordAudioPermissionController = FakeRecordAudioPermissionController(),
                 )
 
             viewModel.onSignalingEndpointChanged("wss://signal.example/ws")
@@ -141,6 +147,7 @@ class StreamControlViewModelTest {
                 StreamControlViewModel(
                     sessionController = controller,
                     configStore = FakeStreamControlConfigStore(),
+                    recordAudioPermissionController = FakeRecordAudioPermissionController(),
                 )
 
             viewModel.onSignalingEndpointChanged("wss://signal.example/ws")
@@ -169,6 +176,7 @@ class StreamControlViewModelTest {
                 StreamControlViewModel(
                     sessionController = controller,
                     configStore = FakeStreamControlConfigStore(),
+                    recordAudioPermissionController = FakeRecordAudioPermissionController(),
                 )
 
             viewModel.onStopClicked()
@@ -186,6 +194,7 @@ class StreamControlViewModelTest {
                 StreamControlViewModel(
                     sessionController = controller,
                     configStore = configStore,
+                    recordAudioPermissionController = FakeRecordAudioPermissionController(),
                 )
             val payload =
                 ReceiverConnectPayloadCodec.encode(
@@ -231,6 +240,7 @@ class StreamControlViewModelTest {
                 StreamControlViewModel(
                     sessionController = controller,
                     configStore = configStore,
+                    recordAudioPermissionController = FakeRecordAudioPermissionController(),
                 )
 
             viewModel.onSignalingEndpointChanged("ws://keep.example/ws")
@@ -265,6 +275,7 @@ class StreamControlViewModelTest {
                 StreamControlViewModel(
                     sessionController = controller,
                     configStore = configStore,
+                    recordAudioPermissionController = FakeRecordAudioPermissionController(),
                     initialConfig = StreamConfig(codecPreference = CodecPreference.VP9),
                 )
 
@@ -275,6 +286,37 @@ class StreamControlViewModelTest {
             assertEquals(R.string.stream_control_codec_device_default, state.codecStatusLabel.resId)
             assertEquals(listOf(CodecPreference.HEVC.displayName), state.codecStatusLabel.args)
             assertEquals(CodecPreference.HEVC, configStore.storedConfig.codecPreference)
+        }
+
+    @Test
+    fun `denied audio permission falls back to video only and persists the change`() =
+        runTest(dispatcher.scheduler) {
+            val controller = FakeStreamingSessionController()
+            val permissionController =
+                FakeRecordAudioPermissionController(RecordAudioPermissionState.Requestable).also {
+                    it.nextRequestResult = RecordAudioPermissionState.Requestable
+                }
+            val initialConfig =
+                StreamConfig(
+                    audioEnabled = true,
+                    signalingEndpoint = "ws://192.168.1.20:8080/ws",
+                )
+            val configStore = FakeStreamControlConfigStore(initialConfig = initialConfig)
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = controller,
+                    configStore = configStore,
+                    recordAudioPermissionController = permissionController,
+                    initialConfig = initialConfig,
+                )
+
+            advanceUntilIdle()
+            viewModel.onStartClicked()
+            advanceUntilIdle()
+
+            assertEquals(1, permissionController.requestCount)
+            assertFalse(controller.lastStartConfig?.audioEnabled ?: true)
+            assertFalse(configStore.storedConfig.audioEnabled)
         }
 
     private class FakeStreamControlConfigStore(

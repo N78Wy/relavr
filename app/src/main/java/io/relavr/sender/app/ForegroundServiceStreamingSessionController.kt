@@ -9,6 +9,8 @@ import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
 import io.relavr.sender.core.model.UiText
+import io.relavr.sender.core.session.RecordAudioPermissionController
+import io.relavr.sender.core.session.RecordAudioPermissionState
 import io.relavr.sender.core.session.StreamingSessionController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -21,6 +23,7 @@ import kotlinx.coroutines.launch
 internal class ForegroundServiceStreamingSessionController(
     private val sessionEngine: StreamingSessionController,
     private val commandDispatcher: ForegroundServiceCommandDispatcher,
+    private val recordAudioPermissionController: RecordAudioPermissionController,
     dispatchers: AppDispatchers,
     private val logger: AppLogger,
 ) : StreamingSessionController {
@@ -38,17 +41,25 @@ internal class ForegroundServiceStreamingSessionController(
     override suspend fun refreshCapabilities(): CapabilitySnapshot = sessionEngine.refreshCapabilities()
 
     override suspend fun start(config: StreamConfig) {
+        val configToStart = prepareConfigForStart(config)
         state.update { current ->
             current.copy(
                 captureState = CaptureState.RequestingPermission,
                 publishState = PublishState.Preparing,
+                audioState =
+                    if (configToStart.audioEnabled) {
+                        io.relavr.sender.core.model.AudioState.Preparing
+                    } else {
+                        io.relavr.sender.core.model.AudioState.Disabled
+                    },
                 activeVideoProfile = null,
                 statusDetail = UiText.of(io.relavr.sender.core.model.R.string.sender_status_starting_foreground_service),
+                audioDetail = null,
                 error = null,
             )
         }
         runCatching {
-            commandDispatcher.startSession(config)
+            commandDispatcher.startSession(configToStart)
         }.onFailure { throwable ->
             reportFailure(
                 error = SenderError.SessionStartFailed(throwable.message ?: "Unable to start the foreground streaming service."),
@@ -80,6 +91,19 @@ internal class ForegroundServiceStreamingSessionController(
 
     override fun observeState(): StateFlow<StreamingSessionSnapshot> = state
 
+    private suspend fun prepareConfigForStart(config: StreamConfig): StreamConfig {
+        if (!config.audioEnabled) {
+            return config
+        }
+
+        return when (recordAudioPermissionController.requestPermissionIfNeeded()) {
+            RecordAudioPermissionState.Granted -> config
+            RecordAudioPermissionState.Requestable,
+            RecordAudioPermissionState.PermanentlyDenied,
+            -> config.copy(audioEnabled = false)
+        }
+    }
+
     private fun reportFailure(
         error: SenderError,
         throwable: Throwable,
@@ -94,10 +118,12 @@ internal class ForegroundServiceStreamingSessionController(
             current.copy(
                 captureState = CaptureState.Error,
                 publishState = PublishState.Error,
+                audioState = io.relavr.sender.core.model.AudioState.Disabled,
                 resolvedConfig = null,
                 activeVideoProfile = null,
                 codecSelection = null,
                 statusDetail = error.uiText,
+                audioDetail = null,
                 error = error,
             )
         }

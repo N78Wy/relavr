@@ -7,7 +7,9 @@ import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
 import io.relavr.sender.core.model.VideoResolution
+import io.relavr.sender.core.session.RecordAudioPermissionState
 import io.relavr.sender.testing.fakes.FakeAppLogger
+import io.relavr.sender.testing.fakes.FakeRecordAudioPermissionController
 import io.relavr.sender.testing.fakes.FakeStreamingSessionController
 import io.relavr.sender.testing.fakes.TestAppDispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -15,6 +17,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -30,6 +33,7 @@ class ForegroundServiceStreamingSessionControllerTest {
                 ForegroundServiceStreamingSessionController(
                     sessionEngine = engine,
                     commandDispatcher = commandDispatcher,
+                    recordAudioPermissionController = FakeRecordAudioPermissionController(),
                     dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
                     logger = FakeAppLogger(),
                 )
@@ -38,6 +42,7 @@ class ForegroundServiceStreamingSessionControllerTest {
 
             val config =
                 StreamConfig(
+                    audioEnabled = false,
                     codecPreference = CodecPreference.HEVC,
                     resolution = VideoResolution(width = 1920, height = 1080),
                     fps = 60,
@@ -75,6 +80,7 @@ class ForegroundServiceStreamingSessionControllerTest {
                 ForegroundServiceStreamingSessionController(
                     sessionEngine = engine,
                     commandDispatcher = commandDispatcher,
+                    recordAudioPermissionController = FakeRecordAudioPermissionController(),
                     dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
                     logger = FakeAppLogger(),
                 )
@@ -98,6 +104,7 @@ class ForegroundServiceStreamingSessionControllerTest {
                 ForegroundServiceStreamingSessionController(
                     sessionEngine = engine,
                     commandDispatcher = FakeForegroundServiceCommandDispatcher(),
+                    recordAudioPermissionController = FakeRecordAudioPermissionController(),
                     dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
                     logger = FakeAppLogger(),
                 )
@@ -132,12 +139,13 @@ class ForegroundServiceStreamingSessionControllerTest {
                 ForegroundServiceStreamingSessionController(
                     sessionEngine = FakeStreamingSessionController(),
                     commandDispatcher = commandDispatcher,
+                    recordAudioPermissionController = FakeRecordAudioPermissionController(),
                     dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
                     logger = logger,
                 )
 
             advanceUntilIdle()
-            controller.start(StreamConfig(signalingEndpoint = VALID_SIGNALING_ENDPOINT))
+            controller.start(StreamConfig(audioEnabled = false, signalingEndpoint = VALID_SIGNALING_ENDPOINT))
 
             assertEquals(CaptureState.Error, controller.observeState().value.captureState)
             assertEquals(PublishState.Error, controller.observeState().value.publishState)
@@ -146,6 +154,31 @@ class ForegroundServiceStreamingSessionControllerTest {
                 controller.observeState().value.error,
             )
             assertEquals(1, logger.errorLogs.size)
+        }
+
+    @Test
+    fun `record-audio denial forwards a video only config to the foreground service`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val commandDispatcher = FakeForegroundServiceCommandDispatcher()
+            val permissionController =
+                FakeRecordAudioPermissionController(RecordAudioPermissionState.Requestable).also {
+                    it.nextRequestResult = RecordAudioPermissionState.Requestable
+                }
+            val controller =
+                ForegroundServiceStreamingSessionController(
+                    sessionEngine = FakeStreamingSessionController(),
+                    commandDispatcher = commandDispatcher,
+                    recordAudioPermissionController = permissionController,
+                    dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
+                    logger = FakeAppLogger(),
+                )
+
+            advanceUntilIdle()
+            controller.start(StreamConfig(audioEnabled = true, signalingEndpoint = VALID_SIGNALING_ENDPOINT))
+
+            assertFalse(commandDispatcher.lastStartConfig?.audioEnabled ?: true)
+            assertEquals(1, permissionController.requestCount)
         }
 
     private companion object {

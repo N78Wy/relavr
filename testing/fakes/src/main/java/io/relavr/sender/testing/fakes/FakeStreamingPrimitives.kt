@@ -1,6 +1,7 @@
 package io.relavr.sender.testing.fakes
 
 import io.relavr.sender.core.common.AppLogger
+import io.relavr.sender.core.model.AudioState
 import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.CodecSelection
@@ -13,6 +14,9 @@ import io.relavr.sender.core.session.CodecPolicy
 import io.relavr.sender.core.session.PermissionDeniedException
 import io.relavr.sender.core.session.ProjectionAccess
 import io.relavr.sender.core.session.ProjectionPermissionGateway
+import io.relavr.sender.core.session.PublishStartResult
+import io.relavr.sender.core.session.RecordAudioPermissionController
+import io.relavr.sender.core.session.RecordAudioPermissionState
 import io.relavr.sender.core.session.RtcPublishSession
 import io.relavr.sender.core.session.RtcPublisherFactory
 import io.relavr.sender.core.session.RtcSessionEvent
@@ -31,6 +35,34 @@ class FakeProjectionAccess : ProjectionAccess {
 
     override fun close() {
         closed = true
+    }
+}
+
+class FakeRecordAudioPermissionController(
+    initialState: RecordAudioPermissionState = RecordAudioPermissionState.Granted,
+) : RecordAudioPermissionController {
+    private val state = MutableStateFlow(initialState)
+
+    var requestCount: Int = 0
+    var openSettingsCount: Int = 0
+    var nextRequestResult: RecordAudioPermissionState? = null
+
+    override fun observeState(): StateFlow<RecordAudioPermissionState> = state
+
+    override suspend fun requestPermissionIfNeeded(): RecordAudioPermissionState {
+        requestCount += 1
+        val result = nextRequestResult ?: state.value
+        state.value = result
+        nextRequestResult = null
+        return result
+    }
+
+    override fun openAppSettings() {
+        openSettingsCount += 1
+    }
+
+    fun updateState(newState: RecordAudioPermissionState) {
+        state.value = newState
     }
 }
 
@@ -128,15 +160,17 @@ class FakeRtcPublishSession : RtcPublishSession {
     var closed: Boolean = false
     var shouldFail: Boolean = false
     var lastProjectionAccess: ProjectionAccess? = null
+    var nextResult = PublishStartResult(audioState = AudioState.Disabled)
 
     override val events: Flow<RtcSessionEvent> = eventFlow
 
-    override suspend fun publish(projectionAccess: ProjectionAccess) {
+    override suspend fun publish(projectionAccess: ProjectionAccess): PublishStartResult {
         if (shouldFail) {
             throw SenderException(SenderError.SessionStartFailed("fake-publish-failure"))
         }
         publishCount += 1
         lastProjectionAccess = projectionAccess
+        return nextResult
     }
 
     fun emitEvent(event: RtcSessionEvent) {
@@ -210,6 +244,12 @@ class FakeStreamingSessionController(
         lastStartConfig = config
         state.value =
             state.value.copy(
+                audioState =
+                    if (config.audioEnabled) {
+                        AudioState.Capturing
+                    } else {
+                        AudioState.Disabled
+                    },
                 resolvedConfig = config,
                 activeVideoProfile = config.toVideoStreamProfile(),
                 statusDetail = UiText.of(io.relavr.sender.core.model.R.string.sender_status_default_idle),

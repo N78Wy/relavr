@@ -8,6 +8,8 @@ import io.relavr.sender.core.model.ReceiverConnectPayloadCodec
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.UiText
 import io.relavr.sender.core.model.VideoResolution
+import io.relavr.sender.core.session.RecordAudioPermissionController
+import io.relavr.sender.core.session.RecordAudioPermissionState
 import io.relavr.sender.core.session.StreamingSessionController
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,21 +25,27 @@ import kotlinx.coroutines.launch
 class StreamControlViewModel(
     private val sessionController: StreamingSessionController,
     private val configStore: StreamControlConfigStore,
+    private val recordAudioPermissionController: RecordAudioPermissionController,
     initialConfig: StreamConfig = StreamConfig(),
 ) : ViewModel() {
     private val config = MutableStateFlow(initialConfig)
     private val qrScannerState = MutableStateFlow(QrScannerState())
+    private val audioPermissionRequestPending = MutableStateFlow(false)
     private var hasLocalEdits = false
 
     val uiState: StateFlow<StreamControlUiState> =
         combine(
             config,
             qrScannerState,
+            recordAudioPermissionController.observeState(),
+            audioPermissionRequestPending,
             sessionController.observeState(),
-        ) { currentConfig, currentQrScannerState, sessionState ->
+        ) { currentConfig, currentQrScannerState, permissionState, permissionPending, sessionState ->
             buildStreamControlUiState(
                 config = currentConfig,
                 scannerState = currentQrScannerState,
+                recordAudioPermissionState = permissionState,
+                audioPermissionRequestPending = permissionPending,
                 sessionSnapshot = sessionState,
             )
         }.stateIn(
@@ -47,6 +55,8 @@ class StreamControlViewModel(
                 buildStreamControlUiState(
                     config = initialConfig,
                     scannerState = qrScannerState.value,
+                    recordAudioPermissionState = recordAudioPermissionController.observeState().value,
+                    audioPermissionRequestPending = audioPermissionRequestPending.value,
                     sessionSnapshot = sessionController.observeState().value,
                 ),
         )
@@ -102,6 +112,29 @@ class StreamControlViewModel(
         }
     }
 
+    fun onAudioEnabledChanged(enabled: Boolean) {
+        if (!enabled) {
+            updateConfig { current ->
+                current.copy(audioEnabled = false)
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            val permissionState = requestRecordAudioPermission()
+            updateConfig(
+                markAsLocalEdit = true,
+                transform = { current ->
+                    current.copy(audioEnabled = permissionState == RecordAudioPermissionState.Granted)
+                },
+            )
+        }
+    }
+
+    fun onOpenAudioPermissionSettingsClicked() {
+        recordAudioPermissionController.openAppSettings()
+    }
+
     fun onOpenScannerClicked() {
         qrScannerState.update { current ->
             current.copy(visible = true, errorMessage = null)
@@ -142,7 +175,7 @@ class StreamControlViewModel(
                 errorMessage = null,
             )
         viewModelScope.launch {
-            sessionController.start(updatedConfig)
+            sessionController.start(prepareConfigForStart(updatedConfig))
         }
     }
 
@@ -166,7 +199,7 @@ class StreamControlViewModel(
 
     fun onStartClicked() {
         viewModelScope.launch {
-            sessionController.start(config.value)
+            sessionController.start(prepareConfigForStart(config.value))
         }
     }
 
@@ -211,16 +244,45 @@ class StreamControlViewModel(
             runCatching { configStore.save(updatedConfig) }
         }
     }
+
+    private suspend fun prepareConfigForStart(currentConfig: StreamConfig): StreamConfig {
+        if (!currentConfig.audioEnabled) {
+            return currentConfig
+        }
+
+        val permissionState = requestRecordAudioPermission()
+        if (permissionState == RecordAudioPermissionState.Granted) {
+            return currentConfig
+        }
+
+        val fallbackConfig = currentConfig.copy(audioEnabled = false)
+        updateConfig(
+            updatedConfig = fallbackConfig,
+            markAsLocalEdit = true,
+        )
+        return fallbackConfig
+    }
+
+    private suspend fun requestRecordAudioPermission(): RecordAudioPermissionState {
+        audioPermissionRequestPending.value = true
+        return try {
+            recordAudioPermissionController.requestPermissionIfNeeded()
+        } finally {
+            audioPermissionRequestPending.value = false
+        }
+    }
 }
 
 class StreamControlViewModelFactory(
     private val sessionController: StreamingSessionController,
     private val configStore: StreamControlConfigStore,
+    private val recordAudioPermissionController: RecordAudioPermissionController,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
         StreamControlViewModel(
             sessionController = sessionController,
             configStore = configStore,
+            recordAudioPermissionController = recordAudioPermissionController,
         ) as T
 }

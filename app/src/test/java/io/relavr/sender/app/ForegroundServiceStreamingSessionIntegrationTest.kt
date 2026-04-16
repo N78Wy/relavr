@@ -13,6 +13,7 @@ import io.relavr.sender.testing.fakes.FakeCodecCapabilityRepository
 import io.relavr.sender.testing.fakes.FakeCodecPolicy
 import io.relavr.sender.testing.fakes.FakeProjectionAccess
 import io.relavr.sender.testing.fakes.FakeProjectionPermissionGateway
+import io.relavr.sender.testing.fakes.FakeRecordAudioPermissionController
 import io.relavr.sender.testing.fakes.FakeRtcPublisherFactory
 import io.relavr.sender.testing.fakes.FakeSignalingClient
 import io.relavr.sender.testing.fakes.TestAppDispatchers
@@ -55,6 +56,7 @@ class ForegroundServiceStreamingSessionIntegrationTest {
                 ForegroundServiceStreamingSessionController(
                     sessionEngine = coordinator,
                     commandDispatcher = commandDispatcher,
+                    recordAudioPermissionController = FakeRecordAudioPermissionController(),
                     dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
                     logger = FakeAppLogger(),
                 )
@@ -63,6 +65,7 @@ class ForegroundServiceStreamingSessionIntegrationTest {
 
             val config =
                 StreamConfig(
+                    audioEnabled = false,
                     codecPreference = CodecPreference.HEVC,
                     resolution = VideoResolution(width = 1920, height = 1080),
                     fps = 60,
@@ -122,6 +125,7 @@ class ForegroundServiceStreamingSessionIntegrationTest {
                 ForegroundServiceStreamingSessionController(
                     sessionEngine = coordinator,
                     commandDispatcher = commandDispatcher,
+                    recordAudioPermissionController = FakeRecordAudioPermissionController(),
                     dispatchers = TestAppDispatchers(dispatcher, dispatcher, dispatcher),
                     logger = FakeAppLogger(),
                 )
@@ -130,6 +134,7 @@ class ForegroundServiceStreamingSessionIntegrationTest {
 
             val config =
                 StreamConfig(
+                    audioEnabled = false,
                     codecPreference = CodecPreference.HEVC,
                     signalingEndpoint = VALID_SIGNALING_ENDPOINT,
                 )

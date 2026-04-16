@@ -2,6 +2,7 @@ package io.relavr.sender.core.session
 
 import io.relavr.sender.core.common.AppDispatchers
 import io.relavr.sender.core.common.AppLogger
+import io.relavr.sender.core.model.AudioState
 import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.PublishState
@@ -69,7 +70,9 @@ class StreamingSessionCoordinator(
                 it.copy(
                     captureState = CaptureState.RequestingPermission,
                     publishState = PublishState.Preparing,
+                    audioState = if (config.audioEnabled) AudioState.Preparing else AudioState.Disabled,
                     statusDetail = UiText.of(R.string.sender_status_waiting_projection_permission),
+                    audioDetail = null,
                     error = null,
                 )
             }
@@ -97,7 +100,9 @@ class StreamingSessionCoordinator(
                     it.copy(
                         captureState = CaptureState.Starting,
                         publishState = PublishState.Preparing,
+                        audioState = if (config.audioEnabled) AudioState.Preparing else AudioState.Disabled,
                         statusDetail = UiText.of(R.string.sender_status_probing_codec_capabilities),
+                        audioDetail = null,
                     )
                 }
 
@@ -120,7 +125,9 @@ class StreamingSessionCoordinator(
                 }
 
                 state.update {
-                    it.copy(statusDetail = UiText.of(R.string.sender_status_connecting_signaling))
+                    it.copy(
+                        statusDetail = UiText.of(R.string.sender_status_connecting_signaling),
+                    )
                 }
                 val signalingSession =
                     withContext(dispatchers.io) {
@@ -141,11 +148,15 @@ class StreamingSessionCoordinator(
                 monitorJob = observeRtcEvents(sessionToken, publishSession)
 
                 state.update {
-                    it.copy(statusDetail = UiText.of(R.string.sender_status_preparing_video_track))
+                    it.copy(
+                        statusDetail = UiText.of(R.string.sender_status_preparing_video_track),
+                        audioState = if (resolvedConfig.audioEnabled) AudioState.Preparing else AudioState.Disabled,
+                    )
                 }
-                withContext(dispatchers.io) {
-                    publishSession.publish(projectionAccess)
-                }
+                val publishStartResult =
+                    withContext(dispatchers.io) {
+                        publishSession.publish(projectionAccess)
+                    }
 
                 activeSession =
                     ActiveSession(
@@ -160,11 +171,18 @@ class StreamingSessionCoordinator(
                     it.copy(
                         captureState = CaptureState.Capturing,
                         publishState = PublishState.Publishing,
+                        audioState = publishStartResult.audioState,
                         resolvedConfig = resolvedConfig,
                         activeVideoProfile = resolvedConfig.toVideoStreamProfile(),
                         capabilities = capabilities,
                         codecSelection = selection,
-                        statusDetail = UiText.of(R.string.sender_status_streaming_video_only),
+                        statusDetail =
+                            if (publishStartResult.audioState == AudioState.Capturing) {
+                                UiText.of(R.string.sender_status_streaming_video_with_audio)
+                            } else {
+                                UiText.of(R.string.sender_status_streaming_video_only)
+                            },
+                        audioDetail = publishStartResult.audioDetail,
                         error = null,
                     )
                 }
@@ -259,6 +277,17 @@ class StreamingSessionCoordinator(
                         }
                     }
 
+                    is RtcSessionEvent.AudioDegraded -> {
+                        if (activeSessionToken === sessionToken) {
+                            state.update { current ->
+                                current.copy(
+                                    audioState = AudioState.Degraded,
+                                    audioDetail = event.detail,
+                                )
+                            }
+                        }
+                    }
+
                     is RtcSessionEvent.VideoEncoderOverloaded ->
                         terminateFromRtcEvent(
                             sessionToken = sessionToken,
@@ -302,10 +331,12 @@ class StreamingSessionCoordinator(
                 it.copy(
                     captureState = CaptureState.Error,
                     publishState = PublishState.Error,
+                    audioState = AudioState.Disabled,
                     resolvedConfig = null,
                     activeVideoProfile = null,
                     codecSelection = null,
                     statusDetail = error.uiText,
+                    audioDetail = null,
                     error = error,
                 )
             }
@@ -328,10 +359,12 @@ class StreamingSessionCoordinator(
             it.copy(
                 captureState = CaptureState.Error,
                 publishState = PublishState.Error,
+                audioState = AudioState.Disabled,
                 resolvedConfig = null,
                 activeVideoProfile = null,
                 codecSelection = null,
                 statusDetail = error.uiText,
+                audioDetail = null,
                 error = error,
             )
         }
@@ -343,10 +376,12 @@ class StreamingSessionCoordinator(
             it.copy(
                 captureState = CaptureState.Idle,
                 publishState = PublishState.Idle,
+                audioState = AudioState.Disabled,
                 resolvedConfig = null,
                 activeVideoProfile = null,
                 codecSelection = null,
                 statusDetail = null,
+                audioDetail = null,
                 error = null,
             )
         }

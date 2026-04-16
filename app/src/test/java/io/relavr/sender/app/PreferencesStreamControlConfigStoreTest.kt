@@ -23,6 +23,7 @@ class PreferencesStreamControlConfigStoreTest {
             val configStore = PreferencesStreamControlConfigStore(dataStore)
             val expected =
                 StreamConfig(
+                    audioEnabled = false,
                     signalingEndpoint = "wss://signal.example/ws",
                     sessionId = "room-42",
                     codecPreference = CodecPreference.HEVC,
@@ -55,6 +56,7 @@ class PreferencesStreamControlConfigStoreTest {
 
             assertEquals(StreamConfig.DEFAULT_SIGNALING_ENDPOINT, loadedConfig.signalingEndpoint)
             assertEquals(StreamConfig.DEFAULT_SESSION_ID, loadedConfig.sessionId)
+            assertEquals(StreamConfig().audioEnabled, loadedConfig.audioEnabled)
             assertEquals(StreamConfig().codecPreference, loadedConfig.codecPreference)
             assertEquals(StreamConfig.DEFAULT_RESOLUTION, loadedConfig.resolution)
             assertEquals(StreamConfig.DEFAULT_FPS, loadedConfig.fps)

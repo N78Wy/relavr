@@ -26,6 +26,7 @@ import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
 import io.relavr.sender.core.model.VideoResolution
+import io.relavr.sender.core.session.RecordAudioPermissionState
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -126,6 +127,28 @@ class StreamControlScreenTest {
 
         composeRule.onNodeWithTag(StreamControlTestTags.SCAN_BUTTON).performClick()
         assertEquals(1, openScannerCount)
+    }
+
+    @Test
+    fun audio_controls_render_status_and_callbacks() {
+        var audioEnabled = true
+        var settingsOpenCount = 0
+
+        setStreamControlContent(
+            uiState =
+                buildStreamControlUiState(
+                    config = validConfig(),
+                    recordAudioPermissionState = RecordAudioPermissionState.PermanentlyDenied,
+                    sessionSnapshot = StreamingSessionSnapshot(),
+                ),
+            onAudioEnabledChanged = { audioEnabled = it },
+            onOpenAudioPermissionSettingsClicked = { settingsOpenCount += 1 },
+        )
+
+        composeRule.onNodeWithTag(StreamControlTestTags.AUDIO_DISABLE_BUTTON).performClick()
+        assertEquals(false, audioEnabled)
+        composeRule.onNodeWithTag(StreamControlTestTags.AUDIO_SETTINGS_BUTTON).performClick()
+        assertEquals(1, settingsOpenCount)
     }
 
     @Test
@@ -292,6 +315,8 @@ class StreamControlScreenTest {
         onSignalingEndpointChanged: (String) -> Unit = {},
         onSessionIdChanged: (String) -> Unit = {},
         onCodecPreferenceChanged: (CodecPreference) -> Unit = {},
+        onAudioEnabledChanged: (Boolean) -> Unit = {},
+        onOpenAudioPermissionSettingsClicked: () -> Unit = {},
         onOpenScannerClicked: () -> Unit = {},
         onResolutionChanged: (VideoResolution) -> Unit = {},
         onFpsChanged: (Int) -> Unit = {},
@@ -308,6 +333,8 @@ class StreamControlScreenTest {
                     onSignalingEndpointChanged = onSignalingEndpointChanged,
                     onSessionIdChanged = onSessionIdChanged,
                     onCodecPreferenceChanged = onCodecPreferenceChanged,
+                    onAudioEnabledChanged = onAudioEnabledChanged,
+                    onOpenAudioPermissionSettingsClicked = onOpenAudioPermissionSettingsClicked,
                     onOpenScannerClicked = onOpenScannerClicked,
                     onResolutionChanged = onResolutionChanged,
                     onFpsChanged = onFpsChanged,

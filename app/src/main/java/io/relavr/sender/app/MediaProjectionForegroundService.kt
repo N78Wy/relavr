@@ -191,6 +191,7 @@ class MediaProjectionForegroundService : Service() {
         return runCatching {
             StreamConfig(
                 videoEnabled = getBooleanExtra(EXTRA_VIDEO_ENABLED, true),
+                audioEnabled = getBooleanExtra(EXTRA_AUDIO_ENABLED, true),
                 codecPreference = CodecPreference.valueOf(codecName),
                 resolution =
                     VideoResolution(
@@ -218,6 +219,7 @@ class MediaProjectionForegroundService : Service() {
         private const val ACTION_START = "io.relavr.sender.action.START_STREAMING_SESSION"
         private const val ACTION_STOP = "io.relavr.sender.action.STOP_STREAMING_SESSION"
         private const val EXTRA_VIDEO_ENABLED = "extra_video_enabled"
+        private const val EXTRA_AUDIO_ENABLED = "extra_audio_enabled"
         private const val EXTRA_CODEC_NAME = "extra_codec_name"
         private const val EXTRA_RESOLUTION_WIDTH = "extra_resolution_width"
         private const val EXTRA_RESOLUTION_HEIGHT = "extra_resolution_height"
@@ -236,6 +238,7 @@ class MediaProjectionForegroundService : Service() {
             Intent(context, MediaProjectionForegroundService::class.java)
                 .setAction(ACTION_START)
                 .putExtra(EXTRA_VIDEO_ENABLED, config.videoEnabled)
+                .putExtra(EXTRA_AUDIO_ENABLED, config.audioEnabled)
                 .putExtra(EXTRA_CODEC_NAME, config.codecPreference.name)
                 .putExtra(EXTRA_RESOLUTION_WIDTH, config.resolution.width)
                 .putExtra(EXTRA_RESOLUTION_HEIGHT, config.resolution.height)

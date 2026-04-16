@@ -7,6 +7,7 @@ import io.relavr.sender.core.common.DefaultAppDispatchers
 import io.relavr.sender.core.session.StreamingSessionController
 import io.relavr.sender.core.session.StreamingSessionCoordinator
 import io.relavr.sender.feature.streamcontrol.StreamControlViewModelFactory
+import io.relavr.sender.platform.androidcapture.AndroidPlaybackAudioCaptureSessionFactory
 import io.relavr.sender.platform.androidcapture.AndroidProjectionPermissionGateway
 import io.relavr.sender.platform.mediacodec.AndroidMediaCodecCapabilityRepository
 import io.relavr.sender.platform.mediacodec.DefaultCodecPolicy
@@ -22,7 +23,9 @@ class AppContainer(
         application.getSystemService(MediaProjectionManager::class.java)
     private val webRtcLibraryInitializer = WebRtcLibraryInitializer.create(application)
 
-    val projectionPermissionGateway = AndroidProjectionPermissionGateway(mediaProjectionManager)
+    internal val projectionPermissionGateway = AndroidProjectionPermissionGateway(mediaProjectionManager)
+    internal val recordAudioPermissionGateway = createRecordAudioPermissionGateway(application)
+    private val playbackAudioCaptureSessionFactory = AndroidPlaybackAudioCaptureSessionFactory()
 
     internal val sessionEngine: StreamingSessionController =
         StreamingSessionCoordinator(
@@ -35,7 +38,12 @@ class AppContainer(
                 ),
             codecPolicy = DefaultCodecPolicy(),
             rtcPublisherFactory =
-                WebRtcPublisherFactory(application, webRtcLibraryInitializer, AndroidAppLogger),
+                WebRtcPublisherFactory(
+                    application,
+                    webRtcLibraryInitializer,
+                    playbackAudioCaptureSessionFactory,
+                    AndroidAppLogger,
+                ),
             signalingClient = WebSocketSignalingClient(logger = AndroidAppLogger),
             dispatchers = DefaultAppDispatchers,
             logger = AndroidAppLogger,
@@ -49,6 +57,7 @@ class AppContainer(
         ForegroundServiceStreamingSessionController(
             sessionEngine = sessionEngine,
             commandDispatcher = foregroundServiceCommandDispatcher,
+            recordAudioPermissionController = recordAudioPermissionGateway,
             dispatchers = DefaultAppDispatchers,
             logger = AndroidAppLogger,
         )
@@ -57,5 +66,6 @@ class AppContainer(
         StreamControlViewModelFactory(
             sessionController = sessionController,
             configStore = streamControlConfigStore,
+            recordAudioPermissionController = recordAudioPermissionGateway,
         )
 }

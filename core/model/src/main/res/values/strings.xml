@@ -22,7 +22,9 @@
     <string name="sender_status_probing_codec_capabilities">Checking available codec capabilities.</string>
     <string name="sender_status_connecting_signaling">Connecting to the signaling server.</string>
     <string name="sender_status_preparing_video_track">Preparing the WebRTC video track.</string>
+    <string name="sender_status_preparing_system_audio">Preparing system audio capture.</string>
     <string name="sender_status_streaming_video_only">WebRTC connected. Streaming video only.</string>
+    <string name="sender_status_streaming_video_with_audio">WebRTC connected. Streaming video and system audio.</string>
     <string name="sender_status_releasing_resources">Releasing streaming resources.</string>
     <string name="sender_status_starting_foreground_service">Starting the foreground streaming service.</string>
     <string name="sender_status_sending_stop_command">Sending the stop command.</string>
@@ -36,4 +38,8 @@
     <string name="sender_status_video_profile_downgraded">Encoder overload detected. Reduced to %1$s / %2$d FPS / %3$d kbps.</string>
     <string name="sender_status_default_idle">Ready to start streaming.</string>
     <string name="sender_status_permission_requested">Permission requested. Complete the system dialog to continue.</string>
+    <string name="sender_status_audio_capture_active">System audio capture is active.</string>
+    <string name="sender_status_audio_disabled">System audio is disabled for this session.</string>
+    <string name="sender_status_audio_start_fallback">System audio is unavailable. Streaming video only.</string>
+    <string name="sender_status_audio_runtime_degraded">System audio failed during streaming and has been downgraded to silence.</string>
 </resources>

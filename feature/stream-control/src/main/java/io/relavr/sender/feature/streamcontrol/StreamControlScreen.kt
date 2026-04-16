@@ -49,6 +49,9 @@ object StreamControlTestTags {
     const val START_BUTTON = "stream-start"
     const val STOP_BUTTON = "stream-stop"
     const val SCAN_BUTTON = "stream-scan"
+    const val AUDIO_ENABLE_BUTTON = "stream-audio-enable"
+    const val AUDIO_DISABLE_BUTTON = "stream-audio-disable"
+    const val AUDIO_SETTINGS_BUTTON = "stream-audio-settings"
     const val SIGNALING_ENDPOINT_INPUT = "stream-signaling-endpoint"
     const val SESSION_ID_INPUT = "stream-session-id"
     const val STREAM_PROFILE_CARD = "stream-profile-card"
@@ -76,6 +79,8 @@ fun streamControlScreen(
     onSignalingEndpointChanged: (String) -> Unit,
     onSessionIdChanged: (String) -> Unit,
     onCodecPreferenceChanged: (CodecPreference) -> Unit,
+    onAudioEnabledChanged: (Boolean) -> Unit,
+    onOpenAudioPermissionSettingsClicked: () -> Unit,
     onOpenScannerClicked: () -> Unit,
     onResolutionChanged: (VideoResolution) -> Unit,
     onFpsChanged: (Int) -> Unit,
@@ -149,6 +154,8 @@ fun streamControlScreen(
                                 onSignalingEndpointChanged = onSignalingEndpointChanged,
                                 onSessionIdChanged = onSessionIdChanged,
                                 onCodecPreferenceChanged = onCodecPreferenceChanged,
+                                onAudioEnabledChanged = onAudioEnabledChanged,
+                                onOpenAudioPermissionSettingsClicked = onOpenAudioPermissionSettingsClicked,
                                 onOpenScannerClicked = onOpenScannerClicked,
                             )
                         }
@@ -179,6 +186,8 @@ fun streamControlScreen(
                         onSignalingEndpointChanged = onSignalingEndpointChanged,
                         onSessionIdChanged = onSessionIdChanged,
                         onCodecPreferenceChanged = onCodecPreferenceChanged,
+                        onAudioEnabledChanged = onAudioEnabledChanged,
+                        onOpenAudioPermissionSettingsClicked = onOpenAudioPermissionSettingsClicked,
                         onOpenScannerClicked = onOpenScannerClicked,
                     )
                     streamProfileCard(
@@ -243,6 +252,8 @@ private fun configCard(
     onSignalingEndpointChanged: (String) -> Unit,
     onSessionIdChanged: (String) -> Unit,
     onCodecPreferenceChanged: (CodecPreference) -> Unit,
+    onAudioEnabledChanged: (Boolean) -> Unit,
+    onOpenAudioPermissionSettingsClicked: () -> Unit,
     onOpenScannerClicked: () -> Unit,
 ) {
     surfaceCard {
@@ -273,6 +284,79 @@ private fun configCard(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = stringResource(R.string.stream_control_audio_title),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (uiState.audioEnabled) {
+                Button(
+                    onClick = { onAudioEnabledChanged(true) },
+                    enabled = uiState.audioConfigEnabled,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .testTag(StreamControlTestTags.AUDIO_ENABLE_BUTTON),
+                ) {
+                    Text(stringResource(R.string.stream_control_audio_on))
+                }
+            } else {
+                OutlinedButton(
+                    onClick = { onAudioEnabledChanged(true) },
+                    enabled = uiState.audioConfigEnabled,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .testTag(StreamControlTestTags.AUDIO_ENABLE_BUTTON),
+                ) {
+                    Text(stringResource(R.string.stream_control_audio_on))
+                }
+            }
+            if (!uiState.audioEnabled) {
+                Button(
+                    onClick = { onAudioEnabledChanged(false) },
+                    enabled = uiState.audioConfigEnabled,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .testTag(StreamControlTestTags.AUDIO_DISABLE_BUTTON),
+                ) {
+                    Text(stringResource(R.string.stream_control_audio_off))
+                }
+            } else {
+                OutlinedButton(
+                    onClick = { onAudioEnabledChanged(false) },
+                    enabled = uiState.audioConfigEnabled,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .testTag(StreamControlTestTags.AUDIO_DISABLE_BUTTON),
+                ) {
+                    Text(stringResource(R.string.stream_control_audio_off))
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(
+            text = uiState.audioStatusDescription.resolve(),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (uiState.audioSettingsVisible) {
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = onOpenAudioPermissionSettingsClicked,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .testTag(StreamControlTestTags.AUDIO_SETTINGS_BUTTON),
+            ) {
+                Text(stringResource(R.string.stream_control_audio_open_settings))
+            }
+        }
         Spacer(modifier = Modifier.height(16.dp))
         OutlinedTextField(
             value = uiState.signalingEndpoint,
@@ -727,6 +811,8 @@ private fun streamControlScreenPreview() {
         onSignalingEndpointChanged = {},
         onSessionIdChanged = {},
         onCodecPreferenceChanged = {},
+        onAudioEnabledChanged = {},
+        onOpenAudioPermissionSettingsClicked = {},
         onOpenScannerClicked = {},
         onResolutionChanged = {},
         onFpsChanged = {},
