@@ -113,6 +113,10 @@ class MainActivity : AppCompatActivity() {
                             )
                         },
                         onSignalingEndpointChanged = viewModel::onSignalingEndpointChanged,
+                        onSignalingSchemeChanged = viewModel::onSignalingSchemeChanged,
+                        onSignalingHostChanged = viewModel::onSignalingHostChanged,
+                        onSignalingPortChanged = viewModel::onSignalingPortChanged,
+                        onSignalingPathChanged = viewModel::onSignalingPathChanged,
                         onSessionIdChanged = viewModel::onSessionIdChanged,
                         onCodecPreferenceChanged = viewModel::onCodecPreferenceChanged,
                         onAudioEnabledChanged = viewModel::onAudioEnabledChanged,

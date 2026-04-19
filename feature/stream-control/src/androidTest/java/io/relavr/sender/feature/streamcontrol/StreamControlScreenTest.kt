@@ -15,10 +15,10 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import io.relavr.sender.core.model.CapabilitySnapshot
 import io.relavr.sender.core.model.CaptureState
 import io.relavr.sender.core.model.CodecPreference
 import io.relavr.sender.core.model.CodecSelection
@@ -26,7 +26,6 @@ import io.relavr.sender.core.model.PublishState
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.StreamingSessionSnapshot
 import io.relavr.sender.core.model.VideoResolution
-import io.relavr.sender.core.session.RecordAudioPermissionState
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -38,7 +37,46 @@ class StreamControlScreenTest {
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
-    fun start_and_stop_buttons_trigger_the_matching_callbacks() {
+    fun home_page_shows_dual_entry_actions_and_opens_settings_page() {
+        setStreamControlContent(
+            uiState =
+                buildStreamControlUiState(
+                    config = validConfig(),
+                    sessionSnapshot = StreamingSessionSnapshot(),
+                ),
+        )
+
+        composeRule.onNodeWithTag(StreamControlTestTags.HOME_PAGE).assertIsDisplayed()
+        composeRule.onNodeWithTag(StreamControlTestTags.SCAN_BUTTON).assertIsDisplayed()
+        composeRule.onNodeWithTag(StreamControlTestTags.HOST_INPUT).assertIsDisplayed()
+        composeRule.onNodeWithTag(StreamControlTestTags.PORT_INPUT).assertIsDisplayed()
+        composeRule.onNodeWithTag(StreamControlTestTags.SETTINGS_BUTTON).performClick()
+
+        composeRule.onNodeWithTag(StreamControlTestTags.SETTINGS_PAGE).assertIsDisplayed()
+        composeRule.onNodeWithTag(StreamControlTestTags.PATH_INPUT).assertIsDisplayed()
+        composeRule.onNodeWithTag(StreamControlTestTags.SESSION_ID_INPUT).assertIsDisplayed()
+        composeRule.onNodeWithTag(StreamControlTestTags.STREAM_PROFILE_CARD).assertIsDisplayed()
+    }
+
+    @Test
+    fun scan_button_triggers_callback() {
+        var openScannerCount = 0
+
+        setStreamControlContent(
+            uiState =
+                buildStreamControlUiState(
+                    config = validConfig(),
+                    sessionSnapshot = StreamingSessionSnapshot(),
+                ),
+            onOpenScannerClicked = { openScannerCount += 1 },
+        )
+
+        composeRule.onNodeWithTag(StreamControlTestTags.SCAN_BUTTON).performClick()
+        assertEquals(1, openScannerCount)
+    }
+
+    @Test
+    fun start_and_stop_buttons_trigger_matching_callbacks() {
         var startCount = 0
         var stopCount = 0
         var uiState by mutableStateOf(
@@ -73,6 +111,62 @@ class StreamControlScreenTest {
     }
 
     @Test
+    fun manual_connection_inputs_forward_callbacks() {
+        var lastHost = ""
+        var lastPort = ""
+
+        setStreamControlContent(
+            uiState =
+                buildStreamControlUiState(
+                    config = StreamConfig(),
+                    sessionSnapshot = StreamingSessionSnapshot(),
+                ),
+            onSignalingHostChanged = { lastHost = it },
+            onSignalingPortChanged = { lastPort = it },
+        )
+
+        composeRule.onNodeWithTag(StreamControlTestTags.HOST_INPUT).performTextInput("192.168.1.20")
+        composeRule.onNodeWithTag(StreamControlTestTags.PORT_INPUT).performTextClearance()
+        composeRule.onNodeWithTag(StreamControlTestTags.PORT_INPUT).performTextInput("9000")
+
+        assertEquals("192.168.1.20", lastHost)
+        assertEquals("9000", lastPort)
+    }
+
+    @Test
+    fun settings_page_controls_forward_secondary_callbacks() {
+        var selectedScheme = "ws"
+        var lastPath = ""
+        var lastSessionId = ""
+        var selectedResolution = StreamConfig.DEFAULT_RESOLUTION
+
+        setStreamControlContent(
+            uiState =
+                buildStreamControlUiState(
+                    config = validConfig(),
+                    sessionSnapshot = StreamingSessionSnapshot(),
+                ),
+            onSignalingSchemeChanged = { selectedScheme = it },
+            onSignalingPathChanged = { lastPath = it },
+            onSessionIdChanged = { lastSessionId = it },
+            onResolutionChanged = { selectedResolution = it },
+        )
+
+        composeRule.onNodeWithTag(StreamControlTestTags.SETTINGS_BUTTON).performClick()
+        composeRule.onNodeWithTag(StreamControlTestTags.SCHEME_WSS_BUTTON).performClick()
+        composeRule.onNodeWithTag(StreamControlTestTags.PATH_INPUT).performTextClearance()
+        composeRule.onNodeWithTag(StreamControlTestTags.PATH_INPUT).performTextInput("/relay")
+        composeRule.onNodeWithTag(StreamControlTestTags.SESSION_ID_INPUT).performTextClearance()
+        composeRule.onNodeWithTag(StreamControlTestTags.SESSION_ID_INPUT).performTextInput("room-77")
+        composeRule.onNodeWithTag(StreamControlTestTags.resolutionOption(VideoResolution(width = 1920, height = 1080))).performClick()
+
+        assertEquals("wss", selectedScheme)
+        assertEquals("/relay", lastPath)
+        assertEquals("room-77", lastSessionId)
+        assertEquals(VideoResolution(width = 1920, height = 1080), selectedResolution)
+    }
+
+    @Test
     fun error_messages_are_shown_on_screen() {
         setStreamControlContent(
             uiState =
@@ -91,155 +185,46 @@ class StreamControlScreenTest {
     }
 
     @Test
-    fun quest3_lan_endpoint_hint_is_displayed() {
+    fun invalid_manual_config_disables_start_button() {
         setStreamControlContent(
             uiState =
                 buildStreamControlUiState(
-                    config = StreamConfig(),
-                    sessionSnapshot = StreamingSessionSnapshot(),
-                ),
-        )
-
-        composeRule
-            .onNodeWithText(
-                "Use ws://192.168.1.20:8080/ws for a LAN receiver app, or wss://signal.example/ws for a deployed browser preview. Use 10.0.2.2 only on the Android emulator.",
-            ).assertIsDisplayed()
-        composeRule.onNodeWithText("Example: ws://192.168.1.20:8080/ws or wss://signal.example/ws").assertIsDisplayed()
-        composeRule.onNodeWithTag(StreamControlTestTags.SCAN_BUTTON).assertIsDisplayed()
-        composeRule
-            .onNodeWithText(
-                "Scan the receiver QR code to autofill the exact ws:// or wss:// endpoint and start streaming immediately.",
-            ).assertIsDisplayed()
-    }
-
-    @Test
-    fun scan_button_triggers_its_callback() {
-        var openScannerCount = 0
-
-        setStreamControlContent(
-            uiState =
-                buildStreamControlUiState(
-                    config = validConfig(),
-                    sessionSnapshot = StreamingSessionSnapshot(),
-                ),
-            onOpenScannerClicked = { openScannerCount += 1 },
-        )
-
-        composeRule.onNodeWithTag(StreamControlTestTags.SCAN_BUTTON).performClick()
-        assertEquals(1, openScannerCount)
-    }
-
-    @Test
-    fun audio_controls_render_status_and_callbacks() {
-        var audioEnabled = true
-        var settingsOpenCount = 0
-
-        setStreamControlContent(
-            uiState =
-                buildStreamControlUiState(
-                    config = validConfig(),
-                    recordAudioPermissionState = RecordAudioPermissionState.PermanentlyDenied,
-                    sessionSnapshot = StreamingSessionSnapshot(),
-                ),
-            onAudioEnabledChanged = { audioEnabled = it },
-            onOpenAudioPermissionSettingsClicked = { settingsOpenCount += 1 },
-        )
-
-        composeRule.onNodeWithTag(StreamControlTestTags.AUDIO_DISABLE_BUTTON).performClick()
-        assertEquals(false, audioEnabled)
-        composeRule.onNodeWithTag(StreamControlTestTags.AUDIO_SETTINGS_BUTTON).performClick()
-        assertEquals(1, settingsOpenCount)
-    }
-
-    @Test
-    fun scan_status_shows_the_most_recent_receiver_result() {
-        setStreamControlContent(
-            uiState =
-                buildStreamControlUiState(
-                    config = validConfig(),
-                    scannerState =
-                        QrScannerState(
-                            lastReceiver =
-                                io.relavr.sender.core.model.ReceiverConnectionInfo(
-                                    receiverName = "Living Room",
-                                    sessionId = "demo",
-                                    host = "preview.relavr.example",
-                                    port = 443,
-                                    authRequired = true,
-                                    scheme = "wss",
-                                    path = "/ws",
-                                ),
+                    config = StreamConfig(signalingEndpoint = "ws://192.168.1.20/ws"),
+                    signalingEndpointDraft =
+                        SignalingEndpointDraft(
+                            host = "192.168.1.20",
+                            port = "",
+                            path = "/ws",
                         ),
                     sessionSnapshot = StreamingSessionSnapshot(),
                 ),
-        )
-
-        composeRule
-            .onNodeWithText("Last scan: Living Room (wss://preview.relavr.example:443/ws). The receiver still requires local confirmation.")
-            .assertIsDisplayed()
-    }
-
-    @Test
-    fun invalid_config_disables_start_while_inputs_still_forward_callbacks() {
-        var lastEndpoint = ""
-        var lastSessionId = ""
-        var uiState by mutableStateOf(
-            buildStreamControlUiState(
-                config = StreamConfig(signalingEndpoint = "invalid", sessionId = ""),
-                sessionSnapshot = StreamingSessionSnapshot(),
-            ),
-        )
-
-        setStreamControlContent(
-            uiState = uiState,
-            onSignalingEndpointChanged = {
-                lastEndpoint = it
-                uiState = uiState.copy(signalingEndpoint = it)
-            },
-            onSessionIdChanged = {
-                lastSessionId = it
-                uiState = uiState.copy(sessionId = it)
-            },
         )
 
         composeRule.onNodeWithTag(StreamControlTestTags.START_BUTTON).assertIsNotEnabled()
-        composeRule.onNodeWithTag(StreamControlTestTags.SIGNALING_ENDPOINT_INPUT).performTextInput("ws://relay.example/ws")
-        composeRule.onNodeWithTag(StreamControlTestTags.SESSION_ID_INPUT).performTextInput("room-77")
-
-        assertEquals("invalidws://relay.example/ws", lastEndpoint)
-        assertEquals("room-77", lastSessionId)
     }
 
     @Test
-    fun codec_options_are_switchable() {
-        var selectedCodec = CodecPreference.H264
-
+    fun narrow_width_keeps_manual_connect_and_settings_entry_visible() {
         setStreamControlContent(
             uiState =
                 buildStreamControlUiState(
-                    config =
-                        StreamConfig(
-                            signalingEndpoint = VALID_SIGNALING_ENDPOINT,
-                            codecPreference = selectedCodec,
-                        ),
-                    sessionSnapshot =
-                        StreamingSessionSnapshot(
-                            capabilities =
-                                CapabilitySnapshot(
-                                    supportedCodecs = setOf(CodecPreference.H264, CodecPreference.HEVC),
-                                    defaultCodec = CodecPreference.H264,
-                                ),
-                        ),
+                    config = validConfig(),
+                    sessionSnapshot = StreamingSessionSnapshot(),
                 ),
-            onCodecPreferenceChanged = { selectedCodec = it },
+            containerModifier =
+                Modifier
+                    .requiredWidth(360.dp)
+                    .requiredHeight(1200.dp),
         )
 
-        composeRule.onNodeWithTag(StreamControlTestTags.codecOption(CodecPreference.HEVC)).performClick()
-        assertEquals(CodecPreference.HEVC, selectedCodec)
+        composeRule.onNodeWithTag(StreamControlTestTags.HOST_INPUT).assertIsDisplayed()
+        composeRule.onNodeWithTag(StreamControlTestTags.PORT_INPUT).assertIsDisplayed()
+        composeRule.onNodeWithTag(StreamControlTestTags.START_BUTTON).assertIsDisplayed()
+        composeRule.onNodeWithTag(StreamControlTestTags.SETTINGS_BUTTON).assertIsDisplayed()
     }
 
     @Test
-    fun codec_fallback_shows_the_requested_and_resolved_codec() {
+    fun codec_fallback_message_remains_visible_in_settings_page() {
         setStreamControlContent(
             uiState =
                 buildStreamControlUiState(
@@ -260,59 +245,18 @@ class StreamControlScreenTest {
                 ),
         )
 
+        composeRule.onNodeWithTag(StreamControlTestTags.SETTINGS_BUTTON).performClick()
         composeRule.onNodeWithText("Requested H.265 / HEVC. Using H.264 / AVC instead.").assertIsDisplayed()
-    }
-
-    @Test
-    fun profile_options_are_switchable_and_callbacks_receive_user_selections() {
-        var selectedResolution = StreamConfig.DEFAULT_RESOLUTION
-        var selectedFps = StreamConfig.DEFAULT_FPS
-        var selectedBitrate = StreamConfig.DEFAULT_BITRATE_KBPS
-
-        setStreamControlContent(
-            uiState =
-                buildStreamControlUiState(
-                    config = validConfig(),
-                    sessionSnapshot = StreamingSessionSnapshot(),
-                ),
-            onResolutionChanged = { selectedResolution = it },
-            onFpsChanged = { selectedFps = it },
-            onBitrateChanged = { selectedBitrate = it },
-        )
-
-        composeRule.onNodeWithTag(StreamControlTestTags.resolutionOption(VideoResolution(width = 1920, height = 1080))).performClick()
-        composeRule.onNodeWithTag(StreamControlTestTags.fpsOption(60)).performClick()
-        composeRule.onNodeWithTag(StreamControlTestTags.bitrateOption(8000)).performClick()
-
-        assertEquals(VideoResolution(width = 1920, height = 1080), selectedResolution)
-        assertEquals(60, selectedFps)
-        assertEquals(8000, selectedBitrate)
-    }
-
-    @Test
-    fun profile_card_and_action_buttons_remain_visible_at_narrow_widths() {
-        setStreamControlContent(
-            uiState =
-                buildStreamControlUiState(
-                    config = validConfig(),
-                    sessionSnapshot = StreamingSessionSnapshot(),
-                ),
-            containerModifier =
-                Modifier
-                    .requiredWidth(360.dp)
-                    .requiredHeight(1200.dp),
-        )
-
-        composeRule.onNodeWithTag(StreamControlTestTags.STREAM_PROFILE_CARD).assertIsDisplayed()
-        composeRule.onNodeWithTag(StreamControlTestTags.START_BUTTON).assertIsDisplayed()
-        composeRule.onNodeWithTag(StreamControlTestTags.STOP_BUTTON).assertIsDisplayed()
-        composeRule.onNodeWithTag(StreamControlTestTags.resolutionOption(StreamConfig.DEFAULT_RESOLUTION)).assertIsDisplayed()
     }
 
     private fun setStreamControlContent(
         uiState: StreamControlUiState,
         containerModifier: Modifier = Modifier,
         onSignalingEndpointChanged: (String) -> Unit = {},
+        onSignalingSchemeChanged: (String) -> Unit = {},
+        onSignalingHostChanged: (String) -> Unit = {},
+        onSignalingPortChanged: (String) -> Unit = {},
+        onSignalingPathChanged: (String) -> Unit = {},
         onSessionIdChanged: (String) -> Unit = {},
         onCodecPreferenceChanged: (CodecPreference) -> Unit = {},
         onAudioEnabledChanged: (Boolean) -> Unit = {},
@@ -331,6 +275,10 @@ class StreamControlScreenTest {
                     selectedLanguageTag = "en",
                     onLanguageTagSelected = {},
                     onSignalingEndpointChanged = onSignalingEndpointChanged,
+                    onSignalingSchemeChanged = onSignalingSchemeChanged,
+                    onSignalingHostChanged = onSignalingHostChanged,
+                    onSignalingPortChanged = onSignalingPortChanged,
+                    onSignalingPathChanged = onSignalingPathChanged,
                     onSessionIdChanged = onSessionIdChanged,
                     onCodecPreferenceChanged = onCodecPreferenceChanged,
                     onAudioEnabledChanged = onAudioEnabledChanged,

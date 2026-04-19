@@ -9,9 +9,9 @@
     <string name="streaming_notification_stopping">正在停止推流会话</string>
     <string name="streaming_notification_preparing">前台推流服务正在运行</string>
     <string name="sender_scanner_title">扫码连接接收端</string>
-    <string name="sender_scanner_description">扫描 receiver 控制台二维码后会自动填入地址并立即发起开播。</string>
+    <string name="sender_scanner_description">扫描 receiver 二维码后会自动填入接收端地址并立即开始投屏。</string>
     <string name="sender_scanner_requesting_camera_permission">正在请求头显相机权限</string>
-    <string name="sender_scanner_manual_fallback">如果扫码失败，可以关闭弹层后继续手动填写 WebSocket 地址和 Session ID。</string>
+    <string name="sender_scanner_manual_fallback">如果扫码失败，可以关闭弹层后回到首页输入 IP 和端口，或进入更多设置继续连接。</string>
     <string name="sender_scanner_cancel">取消扫码</string>
     <string name="sender_scanner_camera_start_failed">头显相机启动失败</string>
     <string name="sender_scanner_decode_failed">二维码识别失败</string>

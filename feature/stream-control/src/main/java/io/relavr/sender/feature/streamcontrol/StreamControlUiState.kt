@@ -33,6 +33,8 @@ data class StreamControlUiState(
     val statusDescription: UiText,
     val codecOptions: List<CodecOptionUiState>,
     val codecStatusLabel: UiText,
+    val connectionDraft: SignalingEndpointDraft,
+    val connectionSummary: UiText,
     val signalingEndpoint: String,
     val sessionId: String,
     val configEditable: Boolean,
@@ -54,6 +56,7 @@ data class StreamControlUiState(
 
 internal fun buildStreamControlUiState(
     config: StreamConfig,
+    signalingEndpointDraft: SignalingEndpointDraft = parseSignalingEndpointDraft(config.signalingEndpoint),
     scannerState: QrScannerState = QrScannerState(),
     recordAudioPermissionState: RecordAudioPermissionState = RecordAudioPermissionState.Requestable,
     audioPermissionRequestPending: Boolean = false,
@@ -69,7 +72,10 @@ internal fun buildStreamControlUiState(
         capabilities?.let { capabilitySnapshot ->
             config.validationError(capabilitySnapshot)
         }
-    val configValid = config.validationError() == null && capabilityValidationError == null
+    val configValid =
+        signalingEndpointDraft.isReadyToConnect() &&
+            config.validationError() == null &&
+            capabilityValidationError == null
     val hasActiveSession =
         sessionSnapshot.captureState != CaptureState.Idle ||
             sessionSnapshot.publishState != PublishState.Idle
@@ -87,6 +93,8 @@ internal fun buildStreamControlUiState(
                 )
             },
         codecStatusLabel = sessionSnapshot.toCodecStatusLabel(config),
+        connectionDraft = signalingEndpointDraft,
+        connectionSummary = signalingEndpointDraft.toConnectionSummary(config.trimmedSessionId),
         signalingEndpoint = config.signalingEndpoint,
         sessionId = config.sessionId,
         configEditable = configEditable,
@@ -164,7 +172,6 @@ private fun StreamingSessionSnapshot.toStatusLabel(): UiText =
     }
 
 private fun StreamingSessionSnapshot.toStatusDescription(config: StreamConfig): UiText {
-    val resolvedCodec = codecSelection?.resolved?.displayName ?: config.codecPreference.displayName
     statusDetail?.let { detail ->
         return detail
     }
@@ -172,10 +179,7 @@ private fun StreamingSessionSnapshot.toStatusDescription(config: StreamConfig): 
         error != null -> error?.uiText ?: UiText.of(R.string.stream_control_status_failed)
         else ->
             UiText.of(
-                R.string.stream_control_default_profile,
-                config.resolution.label,
-                config.fps,
-                resolvedCodec,
+                R.string.stream_control_ready_description,
                 config.trimmedSessionId,
             )
     }
@@ -309,5 +313,29 @@ private fun CodecPreference.toCodecOptionUiState(
         supportLabel = supportLabel,
         selected = this == selectedPreference,
         enabled = configEditable,
+    )
+}
+
+private fun SignalingEndpointDraft.toConnectionSummary(sessionId: String): UiText {
+    if (host.trim().isEmpty()) {
+        return UiText.of(R.string.stream_control_settings_connection_empty)
+    }
+
+    val normalizedPath = path.normalizedPath()
+    val displayEndpoint =
+        buildString {
+            append(scheme.normalizedScheme())
+            append("://")
+            append(host.trim())
+            if (port.trim().isNotEmpty()) {
+                append(":")
+                append(port.trim())
+            }
+            append(normalizedPath)
+        }
+    return UiText.of(
+        R.string.stream_control_settings_connection_summary,
+        displayEndpoint,
+        sessionId.ifBlank { "-" },
     )
 }

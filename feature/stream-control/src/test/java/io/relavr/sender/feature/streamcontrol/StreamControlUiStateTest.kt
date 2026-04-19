@@ -11,6 +11,7 @@ import io.relavr.sender.core.model.VideoStreamProfile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StreamControlUiStateTest {
@@ -75,5 +76,51 @@ class StreamControlUiStateTest {
 
         assertFalse(uiState.startEnabled)
         assertNotNull(uiState.errorMessage)
+    }
+
+    @Test
+    fun `manual connection draft summary reflects endpoint and session`() {
+        val uiState =
+            buildStreamControlUiState(
+                config =
+                    StreamConfig(
+                        signalingEndpoint = "wss://preview.relavr.example:443/ws",
+                        sessionId = "room-42",
+                    ),
+                signalingEndpointDraft =
+                    SignalingEndpointDraft(
+                        scheme = "wss",
+                        host = "preview.relavr.example",
+                        port = "443",
+                        path = "/ws",
+                    ),
+                sessionSnapshot = StreamingSessionSnapshot(),
+            )
+
+        assertEquals(R.string.stream_control_settings_connection_summary, uiState.connectionSummary.resId)
+        assertEquals("wss://preview.relavr.example:443/ws", uiState.connectionSummary.args[0])
+        assertEquals("room-42", uiState.connectionSummary.args[1])
+    }
+
+    @Test
+    fun `blank manual port disables start even when endpoint still parses`() {
+        val uiState =
+            buildStreamControlUiState(
+                config =
+                    StreamConfig(
+                        signalingEndpoint = "ws://192.168.1.20/ws",
+                    ),
+                signalingEndpointDraft =
+                    SignalingEndpointDraft(
+                        scheme = "ws",
+                        host = "192.168.1.20",
+                        port = "",
+                        path = "/ws",
+                    ),
+                sessionSnapshot = StreamingSessionSnapshot(),
+            )
+
+        assertFalse(uiState.startEnabled)
+        assertTrue(uiState.connectionDraft.host.isNotBlank())
     }
 }

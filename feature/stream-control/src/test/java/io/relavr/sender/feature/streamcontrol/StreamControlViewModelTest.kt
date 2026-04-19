@@ -71,6 +71,10 @@ class StreamControlViewModelTest {
             assertEquals(8000, state.bitrateOptions.single { it.selected }.value)
             assertEquals("wss://signal.example/ws", state.signalingEndpoint)
             assertEquals("saved-room", state.sessionId)
+            assertEquals("wss", state.connectionDraft.scheme)
+            assertEquals("signal.example", state.connectionDraft.host)
+            assertEquals("443", state.connectionDraft.port)
+            assertEquals("/ws", state.connectionDraft.path)
             assertTrue(state.startEnabled)
         }
 
@@ -107,7 +111,7 @@ class StreamControlViewModelTest {
         }
 
     @Test
-    fun `config changes are persisted immediately`() =
+    fun `connection draft and config changes are persisted immediately`() =
         runTest(dispatcher.scheduler) {
             val controller = FakeStreamingSessionController()
             val configStore = FakeStreamControlConfigStore()
@@ -118,7 +122,10 @@ class StreamControlViewModelTest {
                     recordAudioPermissionController = FakeRecordAudioPermissionController(),
                 )
 
-            viewModel.onSignalingEndpointChanged("wss://signal.example/ws")
+            viewModel.onSignalingHostChanged("signal.example")
+            viewModel.onSignalingPortChanged("9443")
+            viewModel.onSignalingSchemeChanged("wss")
+            viewModel.onSignalingPathChanged("/relay")
             viewModel.onSessionIdChanged("room-42")
             viewModel.onCodecPreferenceChanged(CodecPreference.HEVC)
             viewModel.onResolutionChanged(VideoResolution(width = 1920, height = 1080))
@@ -128,7 +135,7 @@ class StreamControlViewModelTest {
 
             assertEquals(
                 StreamConfig(
-                    signalingEndpoint = "wss://signal.example/ws",
+                    signalingEndpoint = "wss://signal.example:9443/relay",
                     sessionId = "room-42",
                     codecPreference = CodecPreference.HEVC,
                     resolution = VideoResolution(width = 1920, height = 1080),
@@ -150,7 +157,10 @@ class StreamControlViewModelTest {
                     recordAudioPermissionController = FakeRecordAudioPermissionController(),
                 )
 
-            viewModel.onSignalingEndpointChanged("wss://signal.example/ws")
+            viewModel.onSignalingHostChanged("signal.example")
+            viewModel.onSignalingPortChanged("9443")
+            viewModel.onSignalingSchemeChanged("wss")
+            viewModel.onSignalingPathChanged("/relay")
             viewModel.onSessionIdChanged("room-42")
             viewModel.onCodecPreferenceChanged(CodecPreference.HEVC)
             viewModel.onResolutionChanged(VideoResolution(width = 1920, height = 1080))
@@ -160,12 +170,32 @@ class StreamControlViewModelTest {
             advanceUntilIdle()
 
             assertEquals(1, controller.startCount)
-            assertEquals("wss://signal.example/ws", controller.lastStartConfig?.signalingEndpoint)
+            assertEquals("wss://signal.example:9443/relay", controller.lastStartConfig?.signalingEndpoint)
             assertEquals("room-42", controller.lastStartConfig?.sessionId)
             assertEquals(CodecPreference.HEVC, controller.lastStartConfig?.codecPreference)
             assertEquals(VideoResolution(width = 1920, height = 1080), controller.lastStartConfig?.resolution)
             assertEquals(60, controller.lastStartConfig?.fps)
             assertEquals(8000, controller.lastStartConfig?.bitrateKbps)
+        }
+
+    @Test
+    fun `blank manual port keeps host draft visible but disables start`() =
+        runTest(dispatcher.scheduler) {
+            val controller = FakeStreamingSessionController()
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = controller,
+                    configStore = FakeStreamControlConfigStore(),
+                    recordAudioPermissionController = FakeRecordAudioPermissionController(),
+                )
+
+            viewModel.onSignalingHostChanged("relay.local")
+            viewModel.onSignalingPortChanged("")
+            advanceUntilIdle()
+
+            assertEquals("relay.local", viewModel.uiState.value.connectionDraft.host)
+            assertEquals("", viewModel.uiState.value.connectionDraft.port)
+            assertFalse(viewModel.uiState.value.startEnabled)
         }
 
     @Test

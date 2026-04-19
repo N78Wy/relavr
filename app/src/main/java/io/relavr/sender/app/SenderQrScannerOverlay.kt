@@ -7,6 +7,7 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -25,6 +27,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -57,18 +60,22 @@ internal fun senderQrScannerOverlay(
         modifier =
             Modifier
                 .fillMaxSize()
-                .background(Color(0xCC02060B)),
+                .background(Color(0xD9040E16)),
         contentAlignment = Alignment.Center,
     ) {
         Card(
             modifier =
                 Modifier
-                    .fillMaxWidth(0.8f),
-            shape = RoundedCornerShape(28.dp),
+                    .fillMaxWidth(0.84f),
+            shape = RoundedCornerShape(32.dp),
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                ),
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
                 Text(
                     text = stringResource(R.string.sender_scanner_title),
@@ -84,8 +91,22 @@ internal fun senderQrScannerOverlay(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .height(360.dp)
-                            .background(Color(0xFF040B12), RoundedCornerShape(20.dp)),
+                            .height(380.dp)
+                            .background(
+                                brush =
+                                    Brush.verticalGradient(
+                                        colors =
+                                            listOf(
+                                                Color(0xFF07111F),
+                                                Color(0xFF0D2030),
+                                            ),
+                                    ),
+                                shape = RoundedCornerShape(24.dp),
+                            ).border(
+                                width = 1.dp,
+                                color = Color.White.copy(alpha = 0.08f),
+                                shape = RoundedCornerShape(24.dp),
+                            ),
                     contentAlignment = Alignment.Center,
                 ) {
                     if (scannerReady) {
@@ -176,7 +197,7 @@ private fun senderQrScannerPreview(
                     cameraProvider.unbindAll()
                     cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, analysis)
                     bound.set(true)
-                }.onFailure { throwable ->
+                }.onFailure {
                     onFailure(UiText.of(R.string.sender_scanner_camera_start_failed))
                 }
             },

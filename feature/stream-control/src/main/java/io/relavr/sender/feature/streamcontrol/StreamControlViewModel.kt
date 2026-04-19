@@ -29,20 +29,25 @@ class StreamControlViewModel(
     initialConfig: StreamConfig = StreamConfig(),
 ) : ViewModel() {
     private val config = MutableStateFlow(initialConfig)
+    private val signalingEndpointDraft = MutableStateFlow(parseSignalingEndpointDraft(initialConfig.signalingEndpoint))
     private val qrScannerState = MutableStateFlow(QrScannerState())
     private val audioPermissionRequestPending = MutableStateFlow(false)
     private var hasLocalEdits = false
 
     val uiState: StateFlow<StreamControlUiState> =
         combine(
-            config,
+            combine(config, signalingEndpointDraft) { currentConfig, currentDraft ->
+                currentConfig to currentDraft
+            },
             qrScannerState,
             recordAudioPermissionController.observeState(),
             audioPermissionRequestPending,
             sessionController.observeState(),
-        ) { currentConfig, currentQrScannerState, permissionState, permissionPending, sessionState ->
+        ) { configAndDraft, currentQrScannerState, permissionState, permissionPending, sessionState ->
+            val (currentConfig, currentDraft) = configAndDraft
             buildStreamControlUiState(
                 config = currentConfig,
+                signalingEndpointDraft = currentDraft,
                 scannerState = currentQrScannerState,
                 recordAudioPermissionState = permissionState,
                 audioPermissionRequestPending = permissionPending,
@@ -54,6 +59,7 @@ class StreamControlViewModel(
             initialValue =
                 buildStreamControlUiState(
                     config = initialConfig,
+                    signalingEndpointDraft = signalingEndpointDraft.value,
                     scannerState = qrScannerState.value,
                     recordAudioPermissionState = recordAudioPermissionController.observeState().value,
                     audioPermissionRequestPending = audioPermissionRequestPending.value,
@@ -68,6 +74,7 @@ class StreamControlViewModel(
                     .getOrDefault(initialConfig)
             if (!hasLocalEdits) {
                 config.value = persistedConfig
+                signalingEndpointDraft.value = parseSignalingEndpointDraft(persistedConfig.signalingEndpoint)
             }
             sessionController.refreshCapabilities()
         }
@@ -95,8 +102,49 @@ class StreamControlViewModel(
     }
 
     fun onSignalingEndpointChanged(endpoint: String) {
-        updateConfig { current ->
+        updateConfig(syncEndpointDraft = true) { current ->
             current.copy(signalingEndpoint = endpoint)
+        }
+    }
+
+    fun onSignalingSchemeChanged(scheme: String) {
+        updateEndpointDraft { current ->
+            val normalizedScheme = scheme.normalizedScheme()
+            val updatedPort =
+                when (current.port.trim()) {
+                    "",
+                    SignalingEndpointDraft.DEFAULT_PORT,
+                    SignalingEndpointDraft.DEFAULT_SECURE_PORT,
+                    ->
+                        if (normalizedScheme == SignalingEndpointDraft.SECURE_SCHEME) {
+                            SignalingEndpointDraft.DEFAULT_SECURE_PORT
+                        } else {
+                            SignalingEndpointDraft.DEFAULT_PORT
+                        }
+                    else -> current.port
+                }
+            current.copy(
+                scheme = normalizedScheme,
+                port = updatedPort,
+            )
+        }
+    }
+
+    fun onSignalingHostChanged(host: String) {
+        updateEndpointDraft { current ->
+            current.copy(host = host)
+        }
+    }
+
+    fun onSignalingPortChanged(port: String) {
+        updateEndpointDraft { current ->
+            current.copy(port = port.filter(Char::isDigit))
+        }
+    }
+
+    fun onSignalingPathChanged(path: String) {
+        updateEndpointDraft { current ->
+            current.copy(path = path)
         }
     }
 
@@ -166,7 +214,10 @@ class StreamControlViewModel(
                 signalingEndpoint = connectionInfo.webSocketUrl,
                 sessionId = connectionInfo.sessionId,
             )
-        updateConfig(updatedConfig)
+        updateConfig(
+            updatedConfig = updatedConfig,
+            syncEndpointDraft = true,
+        )
 
         qrScannerState.value =
             QrScannerState(
@@ -213,14 +264,24 @@ class StreamControlViewModel(
         updatedConfig: StreamConfig,
         markAsLocalEdit: Boolean = true,
         persist: Boolean = true,
+        syncEndpointDraft: Boolean = false,
     ) {
-        if (updatedConfig == config.value) {
+        val updatedDraft =
+            if (syncEndpointDraft) {
+                parseSignalingEndpointDraft(updatedConfig.signalingEndpoint)
+            } else {
+                signalingEndpointDraft.value
+            }
+        if (updatedConfig == config.value && updatedDraft == signalingEndpointDraft.value) {
             return
         }
         if (markAsLocalEdit) {
             hasLocalEdits = true
         }
         config.value = updatedConfig
+        if (syncEndpointDraft) {
+            signalingEndpointDraft.value = updatedDraft
+        }
         if (persist) {
             persistConfig(updatedConfig)
         }
@@ -229,6 +290,7 @@ class StreamControlViewModel(
     private fun updateConfig(
         markAsLocalEdit: Boolean = true,
         persist: Boolean = true,
+        syncEndpointDraft: Boolean = false,
         transform: (StreamConfig) -> StreamConfig,
     ) {
         val currentConfig = config.value
@@ -236,6 +298,22 @@ class StreamControlViewModel(
             updatedConfig = transform(currentConfig),
             markAsLocalEdit = markAsLocalEdit,
             persist = persist,
+            syncEndpointDraft = syncEndpointDraft,
+        )
+    }
+
+    private fun updateEndpointDraft(transform: (SignalingEndpointDraft) -> SignalingEndpointDraft) {
+        val updatedDraft = transform(signalingEndpointDraft.value)
+        if (updatedDraft == signalingEndpointDraft.value) {
+            return
+        }
+        signalingEndpointDraft.value = updatedDraft
+        updateConfig(
+            updatedConfig =
+                config.value.copy(
+                    signalingEndpoint = updatedDraft.toPersistedEndpoint(),
+                ),
+            syncEndpointDraft = false,
         )
     }
 
