@@ -11,6 +11,9 @@
     <string name="sender_scanner_title">扫码连接接收端</string>
     <string name="sender_scanner_description">扫描 receiver 二维码后会自动填入接收端地址并立即开始投屏。</string>
     <string name="sender_scanner_requesting_camera_permission">正在请求头显相机权限</string>
+    <string name="sender_scanner_camera_permission_denied_title">头显相机权限已关闭</string>
+    <string name="sender_scanner_camera_permission_denied_body">相机权限已被永久拒绝。请打开系统设置重新开启头显相机权限，返回后即可继续扫码。</string>
+    <string name="sender_scanner_open_settings">打开系统设置</string>
     <string name="sender_scanner_manual_fallback">如果扫码失败，可以关闭弹层后回到首页输入 IP 和端口，或进入更多设置继续连接。</string>
     <string name="sender_scanner_cancel">取消扫码</string>
     <string name="sender_scanner_camera_start_failed">头显相机启动失败</string>

@@ -349,6 +349,36 @@ class StreamControlViewModelTest {
             assertFalse(configStore.storedConfig.audioEnabled)
         }
 
+    @Test
+    fun `audio can be re-enabled after returning from settings with restored permission`() =
+        runTest(dispatcher.scheduler) {
+            val controller = FakeStreamingSessionController()
+            val permissionController =
+                FakeRecordAudioPermissionController(RecordAudioPermissionState.PermanentlyDenied)
+            val initialConfig =
+                StreamConfig(
+                    audioEnabled = false,
+                    signalingEndpoint = "ws://192.168.1.20:8080/ws",
+                )
+            val configStore = FakeStreamControlConfigStore(initialConfig = initialConfig)
+            val viewModel =
+                StreamControlViewModel(
+                    sessionController = controller,
+                    configStore = configStore,
+                    recordAudioPermissionController = permissionController,
+                    initialConfig = initialConfig,
+                )
+
+            advanceUntilIdle()
+            permissionController.updateState(RecordAudioPermissionState.Granted)
+            viewModel.onAudioEnabledChanged(true)
+            advanceUntilIdle()
+
+            assertEquals(1, permissionController.requestCount)
+            assertTrue(viewModel.uiState.value.audioEnabled)
+            assertTrue(configStore.storedConfig.audioEnabled)
+        }
+
     private class FakeStreamControlConfigStore(
         initialConfig: StreamConfig = StreamConfig(),
         private val loadGate: CompletableDeferred<Unit>? = null,

@@ -38,6 +38,7 @@
 - sender 的系统音频 stop / 回滚阶段同样必须遵守 libwebrtc 的线程生命周期：一旦已向 `WebRtcAudioRecord` 注入 `REMOTE_SUBMIX AudioRecord`，就只能在 `AudioRecordJavaThread` 停止之后再清空 `byteBuffer`、`audioRecord` 等反射字段并释放 capture session，禁止在 stop 前抢先置空内部缓冲。
 - 发送控制台的可编辑配置必须统一通过 `feature/stream-control` 暴露的 `StreamControlConfigStore` 接缝加载和保存；`feature` 只依赖抽象，具体持久化固定由 `app` 层 `DataStore` 实现，禁止在 `feature` 直接访问 `DataStore`、`SharedPreferences` 等 Android 存储 API。
 - 录音权限桥接必须继续由 `app` 层统一持有：`MainActivity` 负责同步 `RECORD_AUDIO` 实时状态、触发系统权限框与应用设置页，`feature` 只通过抽象的权限控制器消费 `Granted / Requestable / PermanentlyDenied` 三态，禁止在 `feature` 直接调用 Android 权限 API。
+- sender 扫码用到的 Quest 头显相机权限同样必须由 `app` 层桥接和重检：`MainActivity` 需要在每次点击扫码入口前与 `onStart()` 回前台时同步实时权限状态，永久拒绝时在扫码弹层内提供系统设置恢复入口；`feature` 只负责声明“是否显示扫码弹层”，不能直接依赖 Android 权限 API。
 - Quest 主界面必须同时提供自由窗口默认尺寸提示和 Compose 响应式布局兜底：`MainActivity` 通过 manifest `layout` 指定平板级默认宽度与最小宽度；首页与设置页在 `<600dp`、`600-839dp`、`>=840dp` 三档宽度下分别切换为紧凑单列、居中单列和宽屏双列，避免 VR 设备上出现手机式窄栏布局。
 - 所有会实例化 `DefaultVideoEncoderFactory`、`PeerConnectionFactory` 或其他直接进入 `org.webrtc` native 方法的实现，都必须先复用共享 `WebRtcLibraryInitializer` 执行一次性初始化；禁止把 `PeerConnectionFactory.initialize(...)` 藏在单个调用点的私有细节里并假设其他路径不会提前访问 JNI。
 - WebRTC codec 能力探测同样必须使用共享 EGL 上下文，不能再用 `DefaultVideoEncoderFactory(null, ...)` 这类无 EGL 的探测路径，否则容易混入非 texture mode 警告并误导性能判断。

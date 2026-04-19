@@ -11,6 +11,9 @@
     <string name="sender_scanner_title">Scan Receiver QR Code</string>
     <string name="sender_scanner_description">Scanning the receiver QR code fills the receiver address and starts streaming immediately.</string>
     <string name="sender_scanner_requesting_camera_permission">Requesting the headset camera permission</string>
+    <string name="sender_scanner_camera_permission_denied_title">Headset camera access is turned off</string>
+    <string name="sender_scanner_camera_permission_denied_body">Camera permission was permanently denied. Open system settings, enable the headset camera permission, and return to continue scanning.</string>
+    <string name="sender_scanner_open_settings">Open System Settings</string>
     <string name="sender_scanner_manual_fallback">If scanning fails, close this sheet and connect from the home page with IP and port, or open more settings.</string>
     <string name="sender_scanner_cancel">Cancel Scan</string>
     <string name="sender_scanner_camera_start_failed">The headset camera could not be started.</string>

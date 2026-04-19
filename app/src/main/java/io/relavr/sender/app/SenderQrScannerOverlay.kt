@@ -21,6 +21,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -31,6 +32,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -48,10 +50,16 @@ import java.util.EnumMap
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
+internal object SenderQrScannerTestTags {
+    const val OPEN_SETTINGS_BUTTON = "scanner-open-settings"
+}
+
 @Composable
 @ExperimentalCamera2Interop
 internal fun senderQrScannerOverlay(
-    scannerReady: Boolean,
+    permissionState: HeadsetCameraPermissionState,
+    permissionRequestPending: Boolean,
+    onOpenSettingsClicked: () -> Unit,
     onDismiss: () -> Unit,
     onPayloadScanned: (String) -> Unit,
     onFailure: (UiText) -> Unit,
@@ -109,23 +117,52 @@ internal fun senderQrScannerOverlay(
                             ),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (scannerReady) {
-                        senderQrScannerPreview(
-                            onPayloadScanned = onPayloadScanned,
-                            onFailure = onFailure,
-                        )
-                    } else {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            CircularProgressIndicator()
-                            Text(
-                                text = stringResource(R.string.sender_scanner_requesting_camera_permission),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
+                    when {
+                        permissionState == HeadsetCameraPermissionState.Granted ->
+                            senderQrScannerPreview(
+                                onPayloadScanned = onPayloadScanned,
+                                onFailure = onFailure,
                             )
-                        }
+
+                        permissionState == HeadsetCameraPermissionState.PermanentlyDenied && !permissionRequestPending ->
+                            Column(
+                                modifier = Modifier.padding(horizontal = 24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.sender_scanner_camera_permission_denied_title),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                Text(
+                                    text = stringResource(R.string.sender_scanner_camera_permission_denied_body),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Button(
+                                    onClick = onOpenSettingsClicked,
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .testTag(SenderQrScannerTestTags.OPEN_SETTINGS_BUTTON),
+                                ) {
+                                    Text(stringResource(R.string.sender_scanner_open_settings))
+                                }
+                            }
+
+                        else ->
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                CircularProgressIndicator()
+                                Text(
+                                    text = stringResource(R.string.sender_scanner_requesting_camera_permission),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
                     }
                 }
                 Text(
@@ -133,7 +170,7 @@ internal fun senderQrScannerOverlay(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Button(
+                OutlinedButton(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth(),
                 ) {

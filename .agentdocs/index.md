@@ -8,6 +8,7 @@
 - 当前无进行中的任务文档。
 
 ## 已完成任务文档
+`workflow/done/260419-fix-permission-recheck-and-settings-recovery.md` - 已为扫码相机权限补齐永久拒绝后的系统设置恢复入口，并修复录音/相机权限从系统设置返回后的重检与恢复链路。
 `workflow/done/260419-redesign-sender-home-ui.md` - 已将 sender 首页重构为扫码/IP+端口双入口，新增全屏更多设置页承接语言、会话、协议路径、音频与画质配置，并补齐回归测试与验收记录。
 `workflow/done/260419-fix-stop-stream-audio-crash.md` - 已修复 sender 在停止推流时提前清空 WebRTC 音频注入字段导致的闪退，补充 stop 清理时序约束与回归单测。
 `workflow/done/260419-fix-playback-capture-audio-underrun.md` - 已将 sender 系统音频注入改为复用 WebRtcAudioRecord 的原生节奏，修复 AudioBufferCallback 主链路导致的高频欠载、噪声与 sender 侧内存异常增长。

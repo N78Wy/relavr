@@ -24,6 +24,7 @@ class AppContainer(
     private val webRtcLibraryInitializer = WebRtcLibraryInitializer.create(application)
 
     internal val projectionPermissionGateway = AndroidProjectionPermissionGateway(mediaProjectionManager)
+    internal val headsetCameraPermissionGateway = createHeadsetCameraPermissionGateway(application)
     internal val recordAudioPermissionGateway = createRecordAudioPermissionGateway(application)
     private val playbackAudioCaptureSessionFactory = AndroidPlaybackAudioCaptureSessionFactory()
 

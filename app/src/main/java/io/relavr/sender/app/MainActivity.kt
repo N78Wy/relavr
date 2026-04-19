@@ -2,7 +2,6 @@ package io.relavr.sender.app
 
 import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
@@ -13,12 +12,10 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -33,7 +30,7 @@ class MainActivity : AppCompatActivity() {
     private val appContainer: AppContainer
         get() = (application as RelavrApplication).appContainer
 
-    private var headsetCameraGranted by mutableStateOf(false)
+    private var headsetCameraPermissionRequestPending by mutableStateOf(false)
 
     private val viewModel: StreamControlViewModel by viewModels {
         appContainer.streamControlViewModelFactory
@@ -48,12 +45,10 @@ class MainActivity : AppCompatActivity() {
         }
     private val headsetCameraPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            headsetCameraGranted = granted
-            if (!granted) {
-                viewModel.onScannerFailed(
-                    UiText.of(io.relavr.sender.feature.streamcontrol.R.string.stream_control_scan_camera_permission_denied),
-                )
-            }
+            appContainer.headsetCameraPermissionGateway.onPermissionResult(
+                granted = granted,
+                shouldShowRationale = shouldShowRequestPermissionRationale(HEADSET_CAMERA_PERMISSION),
+            )
         }
     private val recordAudioPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -66,13 +61,27 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        headsetCameraGranted = hasPermission(HEADSET_CAMERA_PERMISSION)
+        syncHeadsetCameraPermission()
         syncRecordAudioPermission()
 
         lifecycleScope.launch {
             repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
                 appContainer.projectionPermissionGateway.permissionRequests.collect { intent ->
                     projectionPermissionLauncher.launch(intent)
+                }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+                appContainer.headsetCameraPermissionGateway.permissionRequestFlow.collect {
+                    headsetCameraPermissionLauncher.launch(HEADSET_CAMERA_PERMISSION)
+                }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+                appContainer.headsetCameraPermissionGateway.appSettingsRequestFlow.collect {
+                    openAppSettings()
                 }
             }
         }
@@ -93,13 +102,9 @@ class MainActivity : AppCompatActivity() {
 
         setContent {
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+            val headsetCameraPermissionState by appContainer.headsetCameraPermissionGateway.observeState().collectAsStateWithLifecycle()
             relavrTheme {
                 Surface(color = Color.Transparent) {
-                    LaunchedEffect(uiState.scannerVisible, headsetCameraGranted) {
-                        if (uiState.scannerVisible && !headsetCameraGranted) {
-                            headsetCameraPermissionLauncher.launch(HEADSET_CAMERA_PERMISSION)
-                        }
-                    }
                     streamControlScreen(
                         uiState = uiState,
                         selectedLanguageTag = currentAppLanguage().tag,
@@ -119,18 +124,20 @@ class MainActivity : AppCompatActivity() {
                         onSignalingPathChanged = viewModel::onSignalingPathChanged,
                         onSessionIdChanged = viewModel::onSessionIdChanged,
                         onCodecPreferenceChanged = viewModel::onCodecPreferenceChanged,
-                        onAudioEnabledChanged = viewModel::onAudioEnabledChanged,
+                        onAudioEnabledChanged = ::handleAudioEnabledChanged,
                         onOpenAudioPermissionSettingsClicked = viewModel::onOpenAudioPermissionSettingsClicked,
-                        onOpenScannerClicked = viewModel::onOpenScannerClicked,
+                        onOpenScannerClicked = ::handleOpenScannerClicked,
                         onResolutionChanged = viewModel::onResolutionChanged,
                         onFpsChanged = viewModel::onFpsChanged,
                         onBitrateChanged = viewModel::onBitrateChanged,
-                        onStartClicked = viewModel::onStartClicked,
+                        onStartClicked = ::handleStartClicked,
                         onStopClicked = viewModel::onStopClicked,
                     )
                     if (uiState.scannerVisible) {
                         senderQrScannerOverlay(
-                            scannerReady = headsetCameraGranted,
+                            permissionState = headsetCameraPermissionState,
+                            permissionRequestPending = headsetCameraPermissionRequestPending,
+                            onOpenSettingsClicked = appContainer.headsetCameraPermissionGateway::openAppSettings,
                             onDismiss = viewModel::onScannerDismissed,
                             onPayloadScanned = viewModel::onScannerPayloadReceived,
                             onFailure = viewModel::onScannerFailed,
@@ -143,12 +150,53 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        headsetCameraGranted = hasPermission(HEADSET_CAMERA_PERMISSION)
+        syncHeadsetCameraPermission()
         syncRecordAudioPermission()
     }
 
-    private fun hasPermission(permission: String): Boolean =
-        ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+    private fun handleOpenScannerClicked() {
+        syncHeadsetCameraPermission()
+        viewModel.onOpenScannerClicked()
+        if (appContainer.headsetCameraPermissionGateway.observeState().value == HeadsetCameraPermissionState.Requestable) {
+            requestHeadsetCameraPermission()
+        }
+    }
+
+    private fun requestHeadsetCameraPermission() {
+        lifecycleScope.launch {
+            headsetCameraPermissionRequestPending = true
+            try {
+                when (appContainer.headsetCameraPermissionGateway.requestPermissionIfNeeded()) {
+                    HeadsetCameraPermissionState.Granted,
+                    HeadsetCameraPermissionState.PermanentlyDenied,
+                    -> Unit
+
+                    HeadsetCameraPermissionState.Requestable ->
+                        viewModel.onScannerFailed(
+                            UiText.of(io.relavr.sender.feature.streamcontrol.R.string.stream_control_scan_camera_permission_denied),
+                        )
+                }
+            } finally {
+                headsetCameraPermissionRequestPending = false
+            }
+        }
+    }
+
+    private fun handleAudioEnabledChanged(enabled: Boolean) {
+        syncRecordAudioPermission()
+        viewModel.onAudioEnabledChanged(enabled)
+    }
+
+    private fun handleStartClicked() {
+        syncRecordAudioPermission()
+        viewModel.onStartClicked()
+    }
+
+    private fun syncHeadsetCameraPermission() {
+        appContainer.headsetCameraPermissionGateway.syncPermissionStatus(
+            shouldShowRationale = shouldShowRequestPermissionRationale(HEADSET_CAMERA_PERMISSION),
+        )
+    }
 
     private fun syncRecordAudioPermission() {
         appContainer.recordAudioPermissionGateway.syncPermissionStatus(
