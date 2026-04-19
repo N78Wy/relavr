@@ -8,6 +8,7 @@
 - 当前无进行中的任务文档。
 
 ## 已完成任务文档
+`workflow/done/260416-fix-system-audio-overload.md` - 已为 sender 增加音视频过载观测、bitrate 优先快速降档、紧凑音频桥接缓冲与 EGL 上下文 codec 探测，缓解系统音频开启后的延时飙升与 native 内存暴涨。
 `workflow/done/260416-reimplement-system-audio-casting.md` - 已重新设计 sender 系统音频投屏链路，基于 AudioPlaybackCapture 重建权限、采集、WebRTC 注入、video-only 降级与发送控制台状态。
 `workflow/done/260412-remove-audio-streaming.md` - 已移除 sender 音频采集、录音权限、音轨发布、音频 UI 与相关测试，当前版本固定为纯视频推流。
 `workflow/done/260412-fix-audio-permission-permanent-denial.md` - 已修复 sender 在录音权限“拒绝且不再提醒”后没有恢复入口的问题，记录权限三态、设置引导与验证结果。

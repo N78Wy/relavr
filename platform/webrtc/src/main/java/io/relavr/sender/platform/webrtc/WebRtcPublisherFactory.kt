@@ -3,6 +3,8 @@ package io.relavr.sender.platform.webrtc
 import android.content.Context
 import android.content.Intent
 import android.media.projection.MediaProjection
+import android.os.Debug
+import android.os.Process
 import io.relavr.sender.core.common.AppLogger
 import io.relavr.sender.core.model.AudioState
 import io.relavr.sender.core.model.CapabilitySnapshot
@@ -11,6 +13,7 @@ import io.relavr.sender.core.model.SenderError
 import io.relavr.sender.core.model.StreamConfig
 import io.relavr.sender.core.model.UiText
 import io.relavr.sender.core.model.VideoStreamProfile
+import io.relavr.sender.core.session.AudioCaptureFormat
 import io.relavr.sender.core.session.PlaybackAudioCaptureSession
 import io.relavr.sender.core.session.PlaybackAudioCaptureSessionFactory
 import io.relavr.sender.core.session.ProjectionAccess
@@ -24,8 +27,11 @@ import io.relavr.sender.core.session.SignalingSession
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -55,6 +61,7 @@ import org.webrtc.VideoTrack
 import org.webrtc.audio.JavaAudioDeviceModule
 import java.io.Closeable
 import java.nio.ByteBuffer
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
@@ -91,7 +98,7 @@ private class WebRtcPublishSession(
 ) : RtcPublishSession {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val eventFlow = MutableSharedFlow<RtcSessionEvent>(extraBufferCapacity = 32)
-    private val audioBridge = if (config.audioEnabled) WebRtcPlaybackAudioBridge(scope, eventFlow, logger) else null
+    private val audioBridge = if (config.audioEnabled) WebRtcPlaybackAudioBridge(eventFlow, logger) else null
     private val runtime = WebRtcRuntime(appContext, libraryInitializer, audioBridge)
     private val terminalError = CompletableDeferred<SenderError>()
     private val remoteDescriptionReady = CompletableDeferred<Unit>()
@@ -316,6 +323,10 @@ private class WebRtcPublishSession(
         controller: AdaptiveVideoProfileController,
     ): Job =
         scope.launch {
+            var pollsSinceLastPerformanceLog = 0
+            var accumulatedAudioWrittenBytes = 0L
+            var accumulatedAudioDroppedBytes = 0L
+            var accumulatedAudioUnderruns = 0
             while (!closed.get()) {
                 delay(VIDEO_STATS_POLL_INTERVAL_MS)
 
@@ -328,7 +339,44 @@ private class WebRtcPublishSession(
                     }.getOrNull()
                         ?: continue
 
-                when (val decision = controller.evaluate(statsSample)) {
+                val decision = controller.evaluate(statsSample)
+                val assessment = controller.latestAssessment()
+                val audioSnapshot = audioBridge?.snapshotAndReset()
+                if (audioSnapshot != null) {
+                    accumulatedAudioWrittenBytes += audioSnapshot.writtenBytesSinceLastSnapshot
+                    accumulatedAudioDroppedBytes += audioSnapshot.droppedBytesSinceLastSnapshot
+                    accumulatedAudioUnderruns += audioSnapshot.underrunCallbacksSinceLastSnapshot
+                }
+                pollsSinceLastPerformanceLog += 1
+
+                if (
+                    assessment != null &&
+                    shouldLogPerformanceSnapshot(
+                        pollsSinceLastPerformanceLog = pollsSinceLastPerformanceLog,
+                        assessment = assessment,
+                        decision = decision,
+                        audioSnapshot = audioSnapshot,
+                    )
+                ) {
+                    logger.info(
+                        TAG,
+                        buildPerformanceLogMessage(
+                            assessment = assessment,
+                            activeProfile = controller.activeProfile(),
+                            audioSnapshot = audioSnapshot,
+                            accumulatedAudioWrittenBytes = accumulatedAudioWrittenBytes,
+                            accumulatedAudioDroppedBytes = accumulatedAudioDroppedBytes,
+                            accumulatedAudioUnderruns = accumulatedAudioUnderruns,
+                            memorySnapshot = captureProcessMemorySnapshot(),
+                        ),
+                    )
+                    pollsSinceLastPerformanceLog = 0
+                    accumulatedAudioWrittenBytes = 0
+                    accumulatedAudioDroppedBytes = 0
+                    accumulatedAudioUnderruns = 0
+                }
+
+                when (decision) {
                     null -> Unit
 
                     is AdaptiveVideoProfileDecision.Downgrade -> {
@@ -411,6 +459,7 @@ private class WebRtcPublishSession(
         if (encoding == null) {
             logger.error(TAG, "The WebRTC video sender reported no encodings for ${profile.summaryLabel}.", null)
         } else {
+            encoding.minBitrateBps = null
             encoding.maxBitrateBps = profile.bitrateKbps * 1000
             encoding.maxFramerate = profile.fps
             encoding.scaleResolutionDownBy = null
@@ -686,7 +735,7 @@ private class WebRtcPublishSession(
         const val AUDIO_TRACK_ID = "relavr-audio-track"
         const val ANSWER_TIMEOUT_MS = 15_000L
         const val CONNECT_TIMEOUT_MS = 10_000L
-        const val VIDEO_STATS_POLL_INTERVAL_MS = 1_000L
+        const val VIDEO_STATS_POLL_INTERVAL_MS = 250L
     }
 }
 
@@ -718,7 +767,10 @@ private class WebRtcRuntime(
                 JavaAudioDeviceModule
                     .builder(appContext)
                     .setInputSampleRate(WebRtcPlaybackAudioBridge.OUTPUT_SAMPLE_RATE_HZ)
+                    .setOutputSampleRate(WebRtcPlaybackAudioBridge.OUTPUT_SAMPLE_RATE_HZ)
                     .setUseStereoInput(true)
+                    .setUseStereoOutput(false)
+                    .setEnableVolumeLogger(false)
                     .setAudioBufferCallback(audioBridge)
                     .createAudioDeviceModule()
             javaAudioDeviceModule.setAudioRecordEnabled(false)
@@ -743,7 +795,6 @@ private class WebRtcRuntime(
 }
 
 private class WebRtcPlaybackAudioBridge(
-    private val scope: CoroutineScope,
     private val eventFlow: MutableSharedFlow<RtcSessionEvent>,
     private val logger: AppLogger,
 ) : JavaAudioDeviceModule.AudioBufferCallback,
@@ -753,22 +804,27 @@ private class WebRtcPlaybackAudioBridge(
     private val stereoReadBuffer = ByteArray(OUTPUT_BYTES_PER_10MS)
     private val monoReadBuffer = ByteArray(MONO_BYTES_PER_10MS)
     private val monoToStereoBuffer = ByteArray(OUTPUT_BYTES_PER_10MS)
-    private val ringBuffer = ByteArray(OUTPUT_BYTES_PER_10MS * MAX_BUFFERED_FRAMES)
-    private var readIndex: Int = 0
-    private var writeIndex: Int = 0
-    private var availableBytes: Int = 0
+    private val ringBuffer = BoundedPcmRingBuffer(OUTPUT_BYTES_PER_10MS * MAX_BUFFERED_FRAMES)
+    private val captureDispatcher: ExecutorCoroutineDispatcher =
+        Executors
+            .newSingleThreadExecutor { runnable ->
+                Thread(runnable, "RelavrAudioCapture")
+            }.asCoroutineDispatcher()
+    private val captureScope = CoroutineScope(SupervisorJob() + captureDispatcher)
     private var captureSession: PlaybackAudioCaptureSession? = null
     private var captureJob: Job? = null
+    private var activeCaptureFormat: AudioCaptureFormat? = null
+    private var underrunCallbacksSinceLastSnapshot: Int = 0
     private val degraded = AtomicBoolean(false)
 
     fun attachAndStart(session: PlaybackAudioCaptureSession) {
         clearCaptureSession()
-        clearBuffer()
         degraded.set(false)
         captureSession = session
+        activeCaptureFormat = session.format
         session.start()
         captureJob =
-            scope.launch {
+            captureScope.launch {
                 readLoop(session)
             }
     }
@@ -778,6 +834,7 @@ private class WebRtcPlaybackAudioBridge(
         captureJob = null
         val session = captureSession
         captureSession = null
+        activeCaptureFormat = null
         runCatching {
             session?.close()
         }
@@ -794,8 +851,9 @@ private class WebRtcPlaybackAudioBridge(
     ): Long {
         val targetSize = minOf(byteBuffer.capacity(), callbackBuffer.size)
         synchronized(lock) {
-            val copiedBytes = copyFromRing(callbackBuffer, targetSize)
+            val copiedBytes = ringBuffer.read(callbackBuffer, targetSize)
             if (copiedBytes < targetSize) {
+                underrunCallbacksSinceLastSnapshot += 1
                 callbackBuffer.fill(0, copiedBytes, targetSize)
             }
         }
@@ -804,11 +862,29 @@ private class WebRtcPlaybackAudioBridge(
         return System.nanoTime()
     }
 
+    fun snapshotAndReset(): AudioBridgePerformanceSnapshot =
+        synchronized(lock) {
+            val ringSnapshot = ringBuffer.snapshotAndReset()
+            val snapshot =
+                AudioBridgePerformanceSnapshot(
+                    captureFormat = activeCaptureFormat,
+                    bufferedBytes = ringSnapshot.bufferedBytes,
+                    writtenBytesSinceLastSnapshot = ringSnapshot.writtenBytesSinceLastSnapshot,
+                    droppedBytesSinceLastSnapshot = ringSnapshot.droppedBytesSinceLastSnapshot,
+                    underrunCallbacksSinceLastSnapshot = underrunCallbacksSinceLastSnapshot,
+                )
+            underrunCallbacksSinceLastSnapshot = 0
+            snapshot
+        }
+
     override fun close() {
         clearCaptureSession()
+        captureScope.cancel()
+        captureDispatcher.close()
     }
 
     private suspend fun readLoop(session: PlaybackAudioCaptureSession) {
+        Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
         val captureFormat = session.format
         val readBuffer =
             if (captureFormat.channelCount == 2) {
@@ -889,61 +965,14 @@ private class WebRtcPlaybackAudioBridge(
             return
         }
         synchronized(lock) {
-            val bytesToWrite =
-                if (length >= ringBuffer.size) {
-                    source.copyInto(ringBuffer, 0, length - ringBuffer.size, length)
-                    readIndex = 0
-                    writeIndex = 0
-                    availableBytes = ringBuffer.size
-                    return
-                } else {
-                    length
-                }
-            discardOldest(maxOf(0, availableBytes + bytesToWrite - ringBuffer.size))
-
-            val firstChunk = minOf(bytesToWrite, ringBuffer.size - writeIndex)
-            source.copyInto(ringBuffer, writeIndex, 0, firstChunk)
-            if (firstChunk < bytesToWrite) {
-                source.copyInto(ringBuffer, 0, firstChunk, bytesToWrite)
-            }
-            writeIndex = (writeIndex + bytesToWrite) % ringBuffer.size
-            availableBytes += bytesToWrite
+            ringBuffer.write(source, length)
         }
-    }
-
-    private fun copyFromRing(
-        destination: ByteArray,
-        requestedBytes: Int,
-    ): Int {
-        val bytesToCopy = minOf(requestedBytes, availableBytes)
-        if (bytesToCopy <= 0) {
-            return 0
-        }
-
-        val firstChunk = minOf(bytesToCopy, ringBuffer.size - readIndex)
-        ringBuffer.copyInto(destination, 0, readIndex, readIndex + firstChunk)
-        if (firstChunk < bytesToCopy) {
-            ringBuffer.copyInto(destination, firstChunk, 0, bytesToCopy - firstChunk)
-        }
-        readIndex = (readIndex + bytesToCopy) % ringBuffer.size
-        availableBytes -= bytesToCopy
-        return bytesToCopy
-    }
-
-    private fun discardOldest(bytesToDiscard: Int) {
-        if (bytesToDiscard <= 0) {
-            return
-        }
-        val safeDiscard = minOf(bytesToDiscard, availableBytes)
-        readIndex = (readIndex + safeDiscard) % ringBuffer.size
-        availableBytes -= safeDiscard
     }
 
     private fun clearBuffer() {
         synchronized(lock) {
-            readIndex = 0
-            writeIndex = 0
-            availableBytes = 0
+            ringBuffer.clear()
+            underrunCallbacksSinceLastSnapshot = 0
         }
     }
 
@@ -955,9 +984,111 @@ private class WebRtcPlaybackAudioBridge(
         const val OUTPUT_BYTES_PER_SAMPLE_FRAME = OUTPUT_CHANNEL_COUNT * BYTES_PER_SAMPLE
         const val OUTPUT_BYTES_PER_10MS = OUTPUT_SAMPLE_RATE_HZ / 100 * OUTPUT_BYTES_PER_SAMPLE_FRAME
         const val MONO_BYTES_PER_10MS = OUTPUT_SAMPLE_RATE_HZ / 100 * BYTES_PER_SAMPLE
-        const val MAX_BUFFERED_FRAMES = 20
+        const val MAX_BUFFERED_FRAMES = 4
     }
 }
+
+private data class AudioBridgePerformanceSnapshot(
+    val captureFormat: AudioCaptureFormat?,
+    val bufferedBytes: Int,
+    val writtenBytesSinceLastSnapshot: Long,
+    val droppedBytesSinceLastSnapshot: Long,
+    val underrunCallbacksSinceLastSnapshot: Int,
+) {
+    val hasPressure: Boolean =
+        droppedBytesSinceLastSnapshot > 0L ||
+            underrunCallbacksSinceLastSnapshot > 0 ||
+            bufferedBytes >= WebRtcPlaybackAudioBridge.OUTPUT_BYTES_PER_10MS * 3
+}
+
+private data class ProcessMemorySnapshot(
+    val javaHeapUsedBytes: Long,
+    val javaHeapMaxBytes: Long,
+    val nativeHeapAllocatedBytes: Long,
+    val nativeHeapFreeBytes: Long,
+    val totalPssKb: Int,
+)
+
+private fun shouldLogPerformanceSnapshot(
+    pollsSinceLastPerformanceLog: Int,
+    assessment: VideoEncoderAssessment,
+    decision: AdaptiveVideoProfileDecision?,
+    audioSnapshot: AudioBridgePerformanceSnapshot?,
+): Boolean =
+    pollsSinceLastPerformanceLog >= PERFORMANCE_LOG_WINDOWS ||
+        assessment.overloaded ||
+        decision != null ||
+        audioSnapshot?.hasPressure == true
+
+private fun buildPerformanceLogMessage(
+    assessment: VideoEncoderAssessment,
+    activeProfile: VideoStreamProfile,
+    audioSnapshot: AudioBridgePerformanceSnapshot?,
+    accumulatedAudioWrittenBytes: Long,
+    accumulatedAudioDroppedBytes: Long,
+    accumulatedAudioUnderruns: Int,
+    memorySnapshot: ProcessMemorySnapshot,
+): String =
+    buildString {
+        append("perf")
+        append(" activeProfile=")
+        append(activeProfile.summaryLabel)
+        append(" overloaded=")
+        append(assessment.overloaded)
+        append(" encodedFps=")
+        append(String.format("%.2f", assessment.encodedFps))
+        append(" reportedFps=")
+        append(assessment.reportedFps?.let { value -> String.format("%.2f", value) } ?: "n/a")
+        append(" qualityLimitationReason=")
+        append(assessment.qualityLimitationReason ?: "n/a")
+        append(" audioBufferedMs=")
+        append(audioSnapshot?.bufferedBytes?.toAudioMilliseconds() ?: 0)
+        append(" audioWrittenMs=")
+        append(accumulatedAudioWrittenBytes.toAudioMilliseconds())
+        append(" audioDroppedMs=")
+        append(accumulatedAudioDroppedBytes.toAudioMilliseconds())
+        append(" audioUnderruns=")
+        append(accumulatedAudioUnderruns)
+        append(" audioFormat=")
+        append(
+            audioSnapshot?.captureFormat?.let { format ->
+                "${format.sampleRateHz}/${format.channelCount}ch"
+            } ?: "disabled",
+        )
+        append(" javaHeapMb=")
+        append(memorySnapshot.javaHeapUsedBytes.toMegabytes())
+        append("/")
+        append(memorySnapshot.javaHeapMaxBytes.toMegabytes())
+        append(" nativeHeapMb=")
+        append(memorySnapshot.nativeHeapAllocatedBytes.toMegabytes())
+        append(" nativeHeapFreeMb=")
+        append(memorySnapshot.nativeHeapFreeBytes.toMegabytes())
+        append(" totalPssMb=")
+        append(memorySnapshot.totalPssKb / 1024)
+        append(" assessment=")
+        append(assessment.reasonSummary)
+    }
+
+private fun captureProcessMemorySnapshot(): ProcessMemorySnapshot {
+    val runtime = Runtime.getRuntime()
+    val memoryInfo = Debug.MemoryInfo()
+    Debug.getMemoryInfo(memoryInfo)
+    return ProcessMemorySnapshot(
+        javaHeapUsedBytes = runtime.totalMemory() - runtime.freeMemory(),
+        javaHeapMaxBytes = runtime.maxMemory(),
+        nativeHeapAllocatedBytes = Debug.getNativeHeapAllocatedSize(),
+        nativeHeapFreeBytes = Debug.getNativeHeapFreeSize(),
+        totalPssKb = memoryInfo.totalPss,
+    )
+}
+
+private fun Int.toAudioMilliseconds(): Int = ((toDouble() / WebRtcPlaybackAudioBridge.OUTPUT_BYTES_PER_10MS) * 10.0).toInt()
+
+private fun Long.toAudioMilliseconds(): Long = ((toDouble() / WebRtcPlaybackAudioBridge.OUTPUT_BYTES_PER_10MS) * 10.0).toLong()
+
+private fun Long.toMegabytes(): Long = this / (1024L * 1024L)
+
+private const val PERFORMANCE_LOG_WINDOWS = 4
 
 private suspend fun PeerConnection.awaitVideoStats(sender: RtpSender): VideoEncoderStatsSample? =
     kotlinx.coroutines.suspendCancellableCoroutine { continuation ->

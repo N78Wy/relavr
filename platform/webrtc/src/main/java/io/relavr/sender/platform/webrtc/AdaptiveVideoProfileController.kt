@@ -38,28 +38,24 @@ internal class AdaptiveVideoProfileController(
     private val allowedProfiles = supportedProfiles
     private var activeProfile = initialProfile
     private var previousSample: VideoEncoderStatsSample? = null
-    private var warmupWindowsRemaining = WARMUP_WINDOWS
+    private var latestAssessment: VideoEncoderAssessment? = null
     private var cooldownWindowsRemaining = 0
     private var overloadWindows = 0
 
     fun activeProfile(): VideoStreamProfile = activeProfile
 
+    fun latestAssessment(): VideoEncoderAssessment? = latestAssessment
+
     fun evaluate(sample: VideoEncoderStatsSample): AdaptiveVideoProfileDecision? {
         val previous = previousSample
         previousSample = sample
         if (previous == null) {
+            latestAssessment = null
             return null
         }
 
         val assessment = assess(sample, previous, activeProfile)
-
-        if (warmupWindowsRemaining > 0) {
-            warmupWindowsRemaining -= 1
-            if (!assessment.overloaded) {
-                overloadWindows = 0
-            }
-            return null
-        }
+        latestAssessment = assessment
 
         if (!assessment.overloaded) {
             overloadWindows = 0
@@ -75,11 +71,7 @@ internal class AdaptiveVideoProfileController(
 
         overloadWindows += 1
         val requiredWindows =
-            if (nextLowerProfile(activeProfile) == null) {
-                MINIMUM_PROFILE_OVERLOAD_WINDOWS
-            } else {
-                OVERLOAD_WINDOWS_BEFORE_DOWNGRADE
-            }
+            if (nextLowerProfile(activeProfile) == null) MINIMUM_PROFILE_OVERLOAD_WINDOWS else OVERLOAD_WINDOWS_BEFORE_DOWNGRADE
         if (overloadWindows < requiredWindows) {
             return null
         }
@@ -99,6 +91,13 @@ internal class AdaptiveVideoProfileController(
     }
 
     private fun nextLowerProfile(currentProfile: VideoStreamProfile): VideoStreamProfile? {
+        val bitrateCandidates =
+            StreamConfig.BITRATE_OPTIONS_KBPS
+                .filter { bitrateKbps -> bitrateKbps < currentProfile.bitrateKbps }
+                .sortedDescending()
+                .map { bitrateKbps -> currentProfile.copy(bitrateKbps = bitrateKbps) }
+        bitrateCandidates.firstOrNull(::isProfileAllowed)?.let { return it }
+
         val fpsCandidates =
             StreamConfig.FPS_OPTIONS
                 .filter { option -> option < currentProfile.fps }
@@ -117,10 +116,9 @@ internal class AdaptiveVideoProfileController(
     private fun isProfileAllowed(profile: VideoStreamProfile): Boolean = allowedProfiles.isEmpty() || profile in allowedProfiles
 
     private companion object {
-        const val WARMUP_WINDOWS = 2
-        const val COOLDOWN_WINDOWS = 3
+        const val COOLDOWN_WINDOWS = 2
         const val OVERLOAD_WINDOWS_BEFORE_DOWNGRADE = 2
-        const val MINIMUM_PROFILE_OVERLOAD_WINDOWS = 3
+        const val MINIMUM_PROFILE_OVERLOAD_WINDOWS = 2
 
         fun assess(
             current: VideoEncoderStatsSample,
@@ -136,15 +134,14 @@ internal class AdaptiveVideoProfileController(
                     .coerceAtLeast(0L)
             val encodedFps = encodedFramesDelta / elapsedSeconds
             val isCpuLimited = current.qualityLimitationReason.equals("cpu", ignoreCase = true)
-            val isEncodedFpsTooLow = encodedFps < activeProfile.fps * 0.6
+            val isEncodedFpsTooLow = encodedFps < activeProfile.fps * 0.75
             val lowerTierFps =
                 StreamConfig.FPS_OPTIONS
                     .filter { option -> option < activeProfile.fps }
                     .maxOrNull()
             val isReportedFpsTooLow =
                 lowerTierFps != null &&
-                    activeProfile.fps >= 45 &&
-                    (current.framesPerSecond ?: Double.MAX_VALUE) < lowerTierFps * 0.9
+                    (current.framesPerSecond ?: Double.MAX_VALUE) < activeProfile.fps * 0.8
             val reasonSummary =
                 buildString {
                     append("encodedFps=")

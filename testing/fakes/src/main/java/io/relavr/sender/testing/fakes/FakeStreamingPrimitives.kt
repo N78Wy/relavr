@@ -204,13 +204,26 @@ class FakeRtcPublisherFactory(
 }
 
 class FakeAppLogger : AppLogger {
+    data class InfoLog(
+        val tag: String,
+        val message: String,
+    )
+
     data class ErrorLog(
         val tag: String,
         val message: String,
         val throwable: Throwable?,
     )
 
+    val infoLogs = mutableListOf<InfoLog>()
     val errorLogs = mutableListOf<ErrorLog>()
+
+    override fun info(
+        tag: String,
+        message: String,
+    ) {
+        infoLogs += InfoLog(tag = tag, message = message)
+    }
 
     override fun error(
         tag: String,

@@ -2,6 +2,7 @@ package io.relavr.sender.platform.webrtc
 
 import io.relavr.sender.core.model.CodecPreference
 import org.webrtc.DefaultVideoEncoderFactory
+import org.webrtc.EglBase
 
 fun interface WebRtcCodecSupportProvider {
     fun getSupportedCodecs(): Set<CodecPreference>
@@ -9,8 +10,8 @@ fun interface WebRtcCodecSupportProvider {
 
 class DefaultWebRtcCodecSupportProvider(
     private val libraryInitializer: WebRtcLibraryInitializer,
-    private val supportedCodecNamesProvider: () -> List<String> = {
-        DefaultVideoEncoderFactory(null, true, true)
+    private val supportedCodecNamesProvider: (EglBase.Context?) -> List<String> = { eglContext ->
+        DefaultVideoEncoderFactory(checkNotNull(eglContext), true, true)
             .supportedCodecs
             .map { codecInfo -> codecInfo.name }
     },
@@ -19,9 +20,14 @@ class DefaultWebRtcCodecSupportProvider(
 
     private fun supportedCodecNames(): Set<CodecPreference> {
         libraryInitializer.ensureInitialized()
-        return supportedCodecNamesProvider()
-            .mapNotNull { codecName ->
-                CodecPreference.fromWebRtcCodecName(codecName)
-            }.toSet()
+        val eglBase = runCatching { EglBase.create() }.getOrNull()
+        return try {
+            supportedCodecNamesProvider(eglBase?.eglBaseContext)
+                .mapNotNull { codecName ->
+                    CodecPreference.fromWebRtcCodecName(codecName)
+                }.toSet()
+        } finally {
+            eglBase?.release()
+        }
     }
 }

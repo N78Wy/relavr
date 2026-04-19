@@ -31,11 +31,14 @@
 - sender 既然固定依赖 WebSocket 信令、WebRTC 网络状态监测与 `AudioPlaybackCapture`，`app` manifest 必须声明 `android.permission.INTERNET`、`android.permission.ACCESS_NETWORK_STATE` 与 `android.permission.RECORD_AUDIO`；录音权限必须在 app 层预检，若未授权或系统音频初始化失败，只允许降级到 video-only，不得阻断整场投屏。
 - 发送控制台固定开放 `signalingEndpoint`、`sessionId`、编码选择、分辨率、帧率与码率；这些配置都只能在开播前修改。规格候选当前固定为 `1280x720 / 1600x900 / 1920x1080`、`24 / 30 / 45 / 60 FPS`、`2000 / 4000 / 6000 / 8000 kbps`，默认值为 `1280x720 / 30 FPS / 4000 kbps`。编码默认优先 H.264，并且只展示设备 MediaCodec 与 libwebrtc 交集后的可用编码。
 - sender 视频能力现在必须同时维护两层概念：开播前用户选择的 requested profile，以及会话中真实生效的 active profile。设备能力探测需要为预设规格生成 `codec + resolution + fps + bitrate` 组合矩阵，开始推流前据此做二次校验；如果会话内检测到硬件编码器持续过载，则允许在不重连的前提下按预设梯度自动降档，并通过独立状态把 active profile 与降档原因同步给 UI / 通知层。
+- sender 视频过载治理必须优先保护实时性与内存安全：运行期视频健康采样固定按 `250ms` 周期执行，降档顺序固定为 `bitrate -> fps -> resolution`，且最低档位持续过载时必须尽快进入保护分支，不能容忍 native 视频 backlog 长时间增长。
 - sender 系统音频能力同样必须维护“用户请求”和“会话真实状态”两层语义：发送控制台里的 `audioEnabled` 表示用户希望投屏时附带系统音频；会话快照中的 `audioState/audioDetail` 表示当前是否真的成功采集、是否已降级为仅视频或静音。权限拒绝、永久拒绝、`AudioPlaybackCapture` 初始化失败与运行期读取失败都必须收敛到常规状态机，不允许散落成额外补丁。
+- sender 的系统音频桥接必须保持低延时小缓冲：`AudioPlaybackCapture` 读取线程使用独立单线程调度与音频优先级，WebRTC 输入侧 ring buffer 只保留极小窗口并以“丢旧帧、绝不无界积压”为原则；任何新的音频实现都不得把完整性优先于实时性与内存安全。
 - 发送控制台的可编辑配置必须统一通过 `feature/stream-control` 暴露的 `StreamControlConfigStore` 接缝加载和保存；`feature` 只依赖抽象，具体持久化固定由 `app` 层 `DataStore` 实现，禁止在 `feature` 直接访问 `DataStore`、`SharedPreferences` 等 Android 存储 API。
 - 录音权限桥接必须继续由 `app` 层统一持有：`MainActivity` 负责同步 `RECORD_AUDIO` 实时状态、触发系统权限框与应用设置页，`feature` 只通过抽象的权限控制器消费 `Granted / Requestable / PermanentlyDenied` 三态，禁止在 `feature` 直接调用 Android 权限 API。
 - Quest 主界面必须同时提供自由窗口默认尺寸提示和 Compose 响应式布局兜底：`MainActivity` 通过 manifest `layout` 指定平板级默认宽度与最小宽度，发送控制台在 `<600dp`、`600-839dp`、`>=840dp` 三档宽度下分别切换为紧凑单列、居中单列和宽屏双列，避免 VR 设备上出现手机式窄栏布局。
 - 所有会实例化 `DefaultVideoEncoderFactory`、`PeerConnectionFactory` 或其他直接进入 `org.webrtc` native 方法的实现，都必须先复用共享 `WebRtcLibraryInitializer` 执行一次性初始化；禁止把 `PeerConnectionFactory.initialize(...)` 藏在单个调用点的私有细节里并假设其他路径不会提前访问 JNI。
+- WebRTC codec 能力探测同样必须使用共享 EGL 上下文，不能再用 `DefaultVideoEncoderFactory(null, ...)` 这类无 EGL 的探测路径，否则容易混入非 texture mode 警告并误导性能判断。
 - 当前发送控制台和扫码链路都必须接受 `ws://` 与 `wss://` 两类 signaling 地址：Android receiver 继续以 `ws://` 为主，部署到 HTTPS 的 browser-preview 可回填 `wss://`；如后续要强制全站只保留 `wss://`，必须同步收紧 manifest 策略并更新回归测试。
 - sender app 现已固定支持 `English` 与 `简体中文` 两种界面语言；首次启动跟随系统，用户手动切换后由 `AppCompat` locale 持久化恢复。
 - 只要 `MainActivity` 继续继承 `AppCompatActivity` 且语言切换仍依赖 `AppCompat` locale，`app` 启动主题就必须保持 `AppCompat` 兼容父主题，不能回退到 `@android:style/Theme.DeviceDefault.*` 等非 `AppCompat` 主题，否则会在 `setContent` 前直接启动崩溃。

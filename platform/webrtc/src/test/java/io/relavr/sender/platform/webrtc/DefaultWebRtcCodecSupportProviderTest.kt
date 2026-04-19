@@ -15,7 +15,7 @@ class DefaultWebRtcCodecSupportProviderTest {
         val provider =
             DefaultWebRtcCodecSupportProvider(
                 libraryInitializer = initializer,
-                supportedCodecNamesProvider = {
+                supportedCodecNamesProvider = { _ ->
                     callOrder += "codecs"
                     listOf("H264", "VP9", "AV1")
                 },

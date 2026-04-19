@@ -10,7 +10,7 @@ import org.junit.Test
 
 class AdaptiveVideoProfileControllerTest {
     @Test
-    fun `sustained overload lowers fps before resolution`() {
+    fun `sustained overload lowers bitrate before fps`() {
         val controller =
             AdaptiveVideoProfileController(
                 initialProfile =
@@ -23,7 +23,7 @@ class AdaptiveVideoProfileControllerTest {
                 supportedProfiles = allProfilesFor(CodecPreference.H264),
             )
 
-        repeat(5) { index ->
+        repeat(3) { index ->
             val decision =
                 controller.evaluate(
                     VideoEncoderStatsSample(
@@ -33,31 +33,32 @@ class AdaptiveVideoProfileControllerTest {
                         qualityLimitationReason = "cpu",
                     ),
                 )
-            if (index < 4) {
+            if (index < 2) {
                 assertEquals(null, decision)
             } else {
                 val downgrade = decision as AdaptiveVideoProfileDecision.Downgrade
-                assertEquals(45, downgrade.profile.fps)
+                assertEquals(6000, downgrade.profile.bitrateKbps)
+                assertEquals(60, downgrade.profile.fps)
                 assertEquals(VideoResolution(width = 1920, height = 1080), downgrade.profile.resolution)
             }
         }
     }
 
     @Test
-    fun `the controller drops resolution after fps floor is reached`() {
+    fun `the controller drops fps after bitrate floor is reached`() {
         val controller =
             AdaptiveVideoProfileController(
                 initialProfile =
                     VideoStreamProfile(
                         codecPreference = CodecPreference.H264,
                         resolution = VideoResolution(width = 1600, height = 900),
-                        fps = 24,
-                        bitrateKbps = 8000,
+                        fps = 60,
+                        bitrateKbps = 2000,
                     ),
                 supportedProfiles = allProfilesFor(CodecPreference.H264),
             )
 
-        repeat(5) { index ->
+        repeat(3) { index ->
             val decision =
                 controller.evaluate(
                     VideoEncoderStatsSample(
@@ -67,9 +68,43 @@ class AdaptiveVideoProfileControllerTest {
                         qualityLimitationReason = "cpu",
                     ),
                 )
-            if (index == 4) {
+            if (index == 2) {
+                val downgrade = decision as AdaptiveVideoProfileDecision.Downgrade
+                assertEquals(45, downgrade.profile.fps)
+                assertEquals(2000, downgrade.profile.bitrateKbps)
+                assertEquals(VideoResolution(width = 1600, height = 900), downgrade.profile.resolution)
+            }
+        }
+    }
+
+    @Test
+    fun `the controller drops resolution after bitrate and fps floors are reached`() {
+        val controller =
+            AdaptiveVideoProfileController(
+                initialProfile =
+                    VideoStreamProfile(
+                        codecPreference = CodecPreference.H264,
+                        resolution = VideoResolution(width = 1600, height = 900),
+                        fps = 24,
+                        bitrateKbps = 2000,
+                    ),
+                supportedProfiles = allProfilesFor(CodecPreference.H264),
+            )
+
+        repeat(3) { index ->
+            val decision =
+                controller.evaluate(
+                    VideoEncoderStatsSample(
+                        timestampUs = index * 1_000_000L,
+                        framesEncoded = index.toLong() * 5L,
+                        framesPerSecond = 10.0,
+                        qualityLimitationReason = "cpu",
+                    ),
+                )
+            if (index == 2) {
                 val downgrade = decision as AdaptiveVideoProfileDecision.Downgrade
                 assertEquals(24, downgrade.profile.fps)
+                assertEquals(2000, downgrade.profile.bitrateKbps)
                 assertEquals(VideoResolution(width = 1280, height = 720), downgrade.profile.resolution)
             }
         }
@@ -91,7 +126,7 @@ class AdaptiveVideoProfileControllerTest {
             )
 
         val decisions =
-            (0..5).map { index ->
+            (0..2).map { index ->
                 controller.evaluate(
                     VideoEncoderStatsSample(
                         timestampUs = index * 1_000_000L,
