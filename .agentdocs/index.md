@@ -8,6 +8,7 @@
 - 当前无进行中的任务文档。
 
 ## 已完成任务文档
+`workflow/done/260419-fix-playback-capture-audio-underrun.md` - 已将 sender 系统音频注入改为复用 WebRtcAudioRecord 的原生节奏，修复 AudioBufferCallback 主链路导致的高频欠载、噪声与 sender 侧内存异常增长。
 `workflow/done/260416-fix-system-audio-overload.md` - 已为 sender 增加音视频过载观测、bitrate 优先快速降档、紧凑音频桥接缓冲与 EGL 上下文 codec 探测，缓解系统音频开启后的延时飙升与 native 内存暴涨。
 `workflow/done/260416-reimplement-system-audio-casting.md` - 已重新设计 sender 系统音频投屏链路，基于 AudioPlaybackCapture 重建权限、采集、WebRTC 注入、video-only 降级与发送控制台状态。
 `workflow/done/260412-remove-audio-streaming.md` - 已移除 sender 音频采集、录音权限、音轨发布、音频 UI 与相关测试，当前版本固定为纯视频推流。
@@ -41,6 +42,7 @@
 - 首阶段 sender 建链协议固定为 `WebSocket + JSON Offer/Answer`，发送控制台必须提供 `signalingEndpoint` 与 `sessionId` 输入。
 - sender 扫码自动连接当前固定镜像 `relavr-view` 的 `receiver-connect v2` 协议，载荷包含 `scheme/path`；扫码后必须精确恢复二维码里的完整 `ws/wss` signaling 地址。
 - 当前版本 sender 支持视频推流与可选系统音频推流；系统音频固定走 `AudioPlaybackCapture`，仅覆盖允许被系统捕获的其他 app 媒体声或游戏声；若录音权限缺失、初始化失败或运行期读取异常，则自动降级为 video-only 或静音而不中断视频。
+- 当前 sender 的系统音频输入固定通过 `AudioPlaybackCapture` 创建 `REMOTE_SUBMIX AudioRecord`，并注入到 libwebrtc 的 `WebRtcAudioRecord` 节奏中；任何替代实现都必须先证明不会重新引入持续欠载、噪声或 native 内存线性增长。
 - sender 视频规格继续允许在开播前自由选择，但运行时必须区分用户请求的 requested profile 与实际生效的 active profile；若检测到硬编持续过载，允许在同一会话内按预设梯度自动降档，并在最低档仍无法稳定时主动结束会话，避免编码积压导致 OOM。
 - 提交前必须至少执行 `./gradlew spotlessCheck`、`./gradlew lintDebug`、`./gradlew testDebugUnitTest`。
 - 如改动 `demo/browser-preview`，还必须执行 `npm run format:check`、`npm run lint`、`npm run test`。

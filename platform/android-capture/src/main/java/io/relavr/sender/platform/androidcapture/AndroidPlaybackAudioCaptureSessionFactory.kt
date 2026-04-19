@@ -87,22 +87,9 @@ class AndroidPlaybackAudioCaptureSessionFactory : PlaybackAudioCaptureSessionFac
 }
 
 private class AndroidPlaybackAudioCaptureSession(
-    private val audioRecord: AudioRecord,
+    override val audioRecord: AudioRecord,
     override val format: AudioCaptureFormat,
 ) : PlaybackAudioCaptureSession {
-    override fun start() {
-        audioRecord.startRecording()
-        check(audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-            "AudioPlaybackCapture did not enter RECORDSTATE_RECORDING."
-        }
-    }
-
-    override fun read(
-        buffer: ByteArray,
-        offsetInBytes: Int,
-        sizeInBytes: Int,
-    ): Int = audioRecord.read(buffer, offsetInBytes, sizeInBytes)
-
     override fun close() {
         runCatching {
             audioRecord.stop()

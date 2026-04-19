@@ -1,6 +1,7 @@
 package io.relavr.sender.core.session
 
 import android.content.Intent
+import android.media.AudioRecord
 import android.media.projection.MediaProjection
 import io.relavr.sender.core.model.AudioState
 import io.relavr.sender.core.model.CapabilitySnapshot
@@ -43,14 +44,7 @@ data class AudioCaptureFormat(
 
 interface PlaybackAudioCaptureSession : Closeable {
     val format: AudioCaptureFormat
-
-    fun start()
-
-    fun read(
-        buffer: ByteArray,
-        offsetInBytes: Int,
-        sizeInBytes: Int,
-    ): Int
+    val audioRecord: AudioRecord
 }
 
 fun interface PlaybackAudioCaptureSessionFactory {
