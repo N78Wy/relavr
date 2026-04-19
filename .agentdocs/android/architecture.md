@@ -35,6 +35,7 @@
 - sender 系统音频能力同样必须维护“用户请求”和“会话真实状态”两层语义：发送控制台里的 `audioEnabled` 表示用户希望投屏时附带系统音频；会话快照中的 `audioState/audioDetail` 表示当前是否真的成功采集、是否已降级为仅视频或静音。权限拒绝、永久拒绝、`AudioPlaybackCapture` 初始化失败与运行期读取失败都必须收敛到常规状态机，不允许散落成额外补丁。
 - sender 的系统音频桥接必须保持低延时小缓冲：`AudioPlaybackCapture` 读取线程使用独立单线程调度与音频优先级，WebRTC 输入侧 ring buffer 只保留极小窗口并以“丢旧帧、绝不无界积压”为原则；任何新的音频实现都不得把完整性优先于实时性与内存安全。
 - sender 的系统音频正式实现必须复用 libwebrtc `WebRtcAudioRecord` 的原生录制节奏；禁止再使用 `JavaAudioDeviceModule.AudioBufferCallback + setAudioRecordEnabled(false)` 作为主链路注入系统音频，否则容易出现高频欠载、噪声和 native 内存异常增长。
+- sender 的系统音频 stop / 回滚阶段同样必须遵守 libwebrtc 的线程生命周期：一旦已向 `WebRtcAudioRecord` 注入 `REMOTE_SUBMIX AudioRecord`，就只能在 `AudioRecordJavaThread` 停止之后再清空 `byteBuffer`、`audioRecord` 等反射字段并释放 capture session，禁止在 stop 前抢先置空内部缓冲。
 - 发送控制台的可编辑配置必须统一通过 `feature/stream-control` 暴露的 `StreamControlConfigStore` 接缝加载和保存；`feature` 只依赖抽象，具体持久化固定由 `app` 层 `DataStore` 实现，禁止在 `feature` 直接访问 `DataStore`、`SharedPreferences` 等 Android 存储 API。
 - 录音权限桥接必须继续由 `app` 层统一持有：`MainActivity` 负责同步 `RECORD_AUDIO` 实时状态、触发系统权限框与应用设置页，`feature` 只通过抽象的权限控制器消费 `Granted / Requestable / PermanentlyDenied` 三态，禁止在 `feature` 直接调用 Android 权限 API。
 - Quest 主界面必须同时提供自由窗口默认尺寸提示和 Compose 响应式布局兜底：`MainActivity` 通过 manifest `layout` 指定平板级默认宽度与最小宽度，发送控制台在 `<600dp`、`600-839dp`、`>=840dp` 三档宽度下分别切换为紧凑单列、居中单列和宽屏双列，避免 VR 设备上出现手机式窄栏布局。

@@ -291,10 +291,10 @@ private class WebRtcPublishSession(
             )
         }.getOrElse { throwable ->
             logger.error(TAG, "Starting system audio capture failed: ${throwable.message}", throwable)
-            bridge.clearPlaybackCapture()
             runCatching { localAudioSender?.dispose() }
             runCatching { localAudioTrack?.dispose() }
             runCatching { localAudioSource?.dispose() }
+            bridge.clearPlaybackCapture()
             audioSender = null
             audioTrack = null
             audioSource = null
@@ -653,9 +653,6 @@ private class WebRtcPublishSession(
             runCatching {
                 signalingSession.send(SignalingMessage.Leave(config.trimmedSessionId))
             }
-        }
-        runCatching {
-            runtime.audioDeviceModule?.clearPlaybackCapture()
         }
         runCatching {
             screenCapturer?.stopCapture()

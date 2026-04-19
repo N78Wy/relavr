@@ -25,7 +25,14 @@ internal data class AudioInputPerformanceSnapshot(
 internal class PlaybackCaptureAudioDeviceModule(
     context: Context,
 ) : AudioDeviceModule {
-    private val metricsObserver = AudioInputMetricsObserver()
+    private val releaseCoordinator = PlaybackCaptureReleaseCoordinator<PlaybackAudioCaptureSession>()
+    private val metricsObserver =
+        AudioInputMetricsObserver(
+            onAudioRecordStarted = releaseCoordinator::onAudioRecordStarted,
+            onAudioRecordStopped = {
+                applyReleaseAction(releaseCoordinator.onAudioRecordStopped())
+            },
+        )
     private val delegate =
         JavaAudioDeviceModule
             .builder(context.applicationContext)
@@ -46,8 +53,6 @@ internal class PlaybackCaptureAudioDeviceModule(
                 .get(delegate),
         )
 
-    private var installedSession: PlaybackAudioCaptureSession? = null
-
     fun installPlaybackCapture(session: PlaybackAudioCaptureSession) {
         require(session.format.sampleRateHz == SAMPLE_RATE_HZ) {
             "Unsupported playback-capture sample rate: ${session.format.sampleRateHz}."
@@ -56,35 +61,28 @@ internal class PlaybackCaptureAudioDeviceModule(
             "Unsupported playback-capture channel count: ${session.format.channelCount}."
         }
 
-        clearPlaybackCapture()
+        applyReleaseAction(releaseCoordinator.install(session))
         configureAudioInput(
             audioInput = audioInput,
             audioRecord = session.audioRecord,
             format = session.format,
         )
-        installedSession = session
         metricsObserver.reset(session.format)
     }
 
     fun clearPlaybackCapture() {
-        val session = installedSession
-        installedSession = null
-        if (session != null) {
-            clearAudioInput(audioInput)
-            runCatching {
-                session.close()
-            }
-        }
+        applyReleaseAction(releaseCoordinator.clear())
         metricsObserver.reset(null)
     }
 
-    fun snapshotAndReset(): AudioInputPerformanceSnapshot = metricsObserver.snapshotAndReset(installedSession?.format)
+    fun snapshotAndReset(): AudioInputPerformanceSnapshot = metricsObserver.snapshotAndReset(releaseCoordinator.currentSession()?.format)
 
     override fun getNative(nativeFactory: Long): Long = delegate.getNative(nativeFactory)
 
     override fun release() {
         delegate.release()
-        clearPlaybackCapture()
+        applyReleaseAction(releaseCoordinator.releaseAll())
+        metricsObserver.reset(null)
     }
 
     override fun setSpeakerMute(muted: Boolean) {
@@ -101,10 +99,23 @@ internal class PlaybackCaptureAudioDeviceModule(
         const val SAMPLE_RATE_HZ = 48_000
         const val CHANNEL_COUNT = 2
     }
+
+    private fun applyReleaseAction(action: PlaybackCaptureReleaseAction<PlaybackAudioCaptureSession>) {
+        action.sessionsToClose.forEach { session ->
+            runCatching {
+                session.close()
+            }
+        }
+        if (action.clearAudioInput) {
+            clearAudioInput(audioInput)
+        }
+    }
 }
 
-private class AudioInputMetricsObserver :
-    JavaAudioDeviceModule.AudioBufferCallback,
+private class AudioInputMetricsObserver(
+    private val onAudioRecordStarted: () -> Unit = {},
+    private val onAudioRecordStopped: () -> Unit = {},
+) : JavaAudioDeviceModule.AudioBufferCallback,
     JavaAudioDeviceModule.AudioRecordErrorCallback,
     JavaAudioDeviceModule.AudioRecordStateCallback {
     private val lock = Any()
@@ -153,12 +164,14 @@ private class AudioInputMetricsObserver :
             started = true
             lastError = null
         }
+        onAudioRecordStarted()
     }
 
     override fun onWebRtcAudioRecordStop() {
         synchronized(lock) {
             started = false
         }
+        onAudioRecordStopped()
     }
 
     override fun onWebRtcAudioRecordInitError(errorMessage: String) {
@@ -221,6 +234,91 @@ private class AudioInputMetricsObserver :
     private companion object {
         const val CHANNELS_STEREO_FRAME_BYTES = 4
         const val CHANNELS_MONO_FRAME_BYTES = 2
+    }
+}
+
+internal data class PlaybackCaptureReleaseAction<T : Any>(
+    val sessionsToClose: List<T> = emptyList(),
+    val clearAudioInput: Boolean = false,
+)
+
+// sender 在 stop/回滚阶段必须先等 WebRTC 自己的录音线程退出，再清掉注入字段，
+// 否则 AudioRecordJavaThread 还会继续访问已置空的 byteBuffer/audioRecord。
+internal class PlaybackCaptureReleaseCoordinator<T : Any> {
+    private val lock = Any()
+    private var activeSession: T? = null
+    private var pendingSessionClose: T? = null
+    private var audioRecordStarted: Boolean = false
+
+    fun install(session: T): PlaybackCaptureReleaseAction<T> =
+        synchronized(lock) {
+            check(!audioRecordStarted) {
+                "Cannot replace playback capture while the WebRTC audio thread is still running."
+            }
+            val action = closeAllLocked()
+            activeSession = session
+            action
+        }
+
+    fun currentSession(): T? =
+        synchronized(lock) {
+            activeSession ?: pendingSessionClose
+        }
+
+    fun clear(): PlaybackCaptureReleaseAction<T> =
+        synchronized(lock) {
+            val session = activeSession ?: return@synchronized PlaybackCaptureReleaseAction()
+            activeSession = null
+            if (audioRecordStarted) {
+                pendingSessionClose = session
+                PlaybackCaptureReleaseAction()
+            } else {
+                PlaybackCaptureReleaseAction(
+                    sessionsToClose = listOf(session),
+                    clearAudioInput = true,
+                )
+            }
+        }
+
+    fun onAudioRecordStarted() {
+        synchronized(lock) {
+            audioRecordStarted = true
+        }
+    }
+
+    fun onAudioRecordStopped(): PlaybackCaptureReleaseAction<T> =
+        synchronized(lock) {
+            audioRecordStarted = false
+            val session = pendingSessionClose ?: return@synchronized PlaybackCaptureReleaseAction()
+            pendingSessionClose = null
+            PlaybackCaptureReleaseAction(
+                sessionsToClose = listOf(session),
+                clearAudioInput = true,
+            )
+        }
+
+    fun releaseAll(): PlaybackCaptureReleaseAction<T> =
+        synchronized(lock) {
+            audioRecordStarted = false
+            closeAllLocked()
+        }
+
+    private fun closeAllLocked(): PlaybackCaptureReleaseAction<T> {
+        val sessions =
+            buildList {
+                activeSession?.let(::add)
+                pendingSessionClose?.let { pending ->
+                    if (pending != activeSession) {
+                        add(pending)
+                    }
+                }
+            }
+        activeSession = null
+        pendingSessionClose = null
+        return PlaybackCaptureReleaseAction(
+            sessionsToClose = sessions,
+            clearAudioInput = sessions.isNotEmpty(),
+        )
     }
 }
 
